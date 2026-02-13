@@ -1,0 +1,32 @@
+# Node modules
+node_modules/
+npm-debug.log
+
+# Build output
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+
+# Data & Logs (Don't upload real user data to GitHub!)
+server/users.db
+server/*.sqlite
+*.log
+*.sqlite3
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
