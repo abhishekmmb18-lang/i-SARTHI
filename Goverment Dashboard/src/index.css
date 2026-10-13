@@ -1,0 +1,202 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --text-scale: 100%;
+  }
+
+  html {
+    font-size: var(--text-scale);
+  }
+
+  body {
+    font-family: 'Noto Sans Devanagari', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #f8fafc;
+    color: #0f172a;
+    transition: font-size 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* High-Contrast Mode */
+  body.high-contrast {
+    background-color: #000000 !important;
+    color: #ffff00 !important;
+  }
+
+  body.high-contrast * {
+    background-color: transparent !important;
+    color: #ffff00 !important;
+    border-color: #ffff00 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  body.high-contrast button,
+  body.high-contrast a {
+    background-color: #000000 !important;
+    color: #00ffff !important;
+    border: 2px solid #00ffff !important;
+  }
+
+  body.high-contrast button:hover,
+  body.high-contrast a:hover {
+    background-color: #00ffff !important;
+    color: #000000 !important;
+  }
+
+  body.high-contrast img,
+  body.high-contrast svg {
+    filter: contrast(150%) brightness(120%) !important;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Official Government Card Styling */
+.gov-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+  transition: all 0.2s ease-in-out;
+}
+
+.gov-card:hover {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+}
+
+.gov-card-interactive {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+}
+
+.gov-card-interactive:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 4px 12px -2px rgb(30 58 138 / 0.1);
+  transform: translateY(-1px);
+}
+
+/* Subtle Government Badges */
+.badge-critical {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.badge-warning {
+  background-color: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.badge-teal {
+  background-color: #f0fdfa;
+  color: #0f766e;
+  border: 1px solid #ccfbf1;
+}
+
+.badge-verified {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.badge-navy {
+  background-color: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #dbeafe;
+}
+
+.badge-neutral {
+  background-color: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+/* Custom Leaflet Map styling */
+.leaflet-container {
+  font-family: 'Inter', sans-serif !important;
+  border-radius: 0.75rem;
+  z-index: 10;
+}
+
+.custom-map-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s ease;
+}
+
+.custom-map-pin:hover {
+  transform: scale(1.15);
+}
+
+.pin-critical {
+  background: #dc2626;
+  border: 2px solid #ffffff;
+}
+
+.pin-warning {
+  background: #d97706;
+  border: 2px solid #ffffff;
+}
+
+.pin-teal {
+  background: #0d9488;
+  border: 2px solid #ffffff;
+}
+
+.pin-verified {
+  background: #16a34a;
+  border: 2px solid #ffffff;
+  outline: 2px solid #16a34a;
+}
+
+/* Clean Government Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print layout for Official MoRTH Reports */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  header, nav, .no-print {
+    display: none !important;
+  }
+
+  .gov-card {
+    border: 1px solid #000000 !important;
+    box-shadow: none !important;
+  }
+}
