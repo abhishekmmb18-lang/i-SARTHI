@@ -353,30 +353,142 @@ const LandingPage = ({ onEnterDashboard, onOpenGovPortal }) => {
                 </div>
             </header>
 
-            {/* Real Telemetry Info Bar */}
-            <div className="w-full bg-[#070d1e]/90 border-b border-cyan-500/20 py-2 overflow-hidden backdrop-blur-md">
-                <div className="animate-marquee flex items-center space-x-8 text-[11px] font-mono text-cyan-300/90 tracking-wider font-bold">
-                    {[
-                        `🟢 SUPABASE PERSISTENCE: CONNECTED`,
-                        `📍 LIVE GPS (NEO-7M): ${liveGps.latitude ? `${liveGps.latitude.toFixed(4)}°N, ${liveGps.longitude.toFixed(4)}°E` : 'AWAITING LOCK'}`,
-                        `🍷 MQ-3 ALCOHOL SENSOR: ${alcohol.value.toFixed(1)}% (${alcohol.level || 'Normal'})`,
-                        `📡 DUAL MPU6050: LEFT ${vibration.left.toFixed(2)}G | RIGHT ${vibration.right.toFixed(2)}G`,
-                        `🎯 RADAR SCAN: ANGLE ${radar.angle}° | DIST ${radar.distance} CM`,
-                        `😴 DMS STATUS: ${drowsiness.isDrowsy ? '⚠️ DROWSY' : 'DRIVER ATTENTIVE'}`,
-                        `🛡️ SOS DISPATCH: ${gsm.connected ? 'TWILIO GSM READY' : 'STANDBY'}`
-                    ].concat([
-                        `🟢 SUPABASE PERSISTENCE: CONNECTED`,
-                        `📍 LIVE GPS (NEO-7M): ${liveGps.latitude ? `${liveGps.latitude.toFixed(4)}°N, ${liveGps.longitude.toFixed(4)}°E` : 'AWAITING LOCK'}`,
-                        `🍷 MQ-3 ALCOHOL SENSOR: ${alcohol.value.toFixed(1)}% (${alcohol.level || 'Normal'})`,
-                        `📡 DUAL MPU6050: LEFT ${vibration.left.toFixed(2)}G | RIGHT ${vibration.right.toFixed(2)}G`,
-                        `🎯 RADAR SCAN: ANGLE ${radar.angle}° | DIST ${radar.distance} CM`,
-                        `😴 DMS STATUS: ${drowsiness.isDrowsy ? '⚠️ DROWSY' : 'DRIVER ATTENTIVE'}`
-                    ]).map((text, idx) => (
-                        <div key={idx} className="flex items-center space-x-3">
-                            <span>{text}</span>
-                            <span className="text-pink-500">✦</span>
-                        </div>
-                    ))}
+            {/* I-SARTHI End-to-End Autonomous Workflow Pipeline Bar */}
+            <div className="w-full bg-[#060b18]/95 border-y border-cyan-500/30 py-2.5 overflow-hidden backdrop-blur-xl relative shadow-lg shadow-cyan-950/40">
+                <div className="flex items-center">
+                    {/* Fixed High-Tech Workflow Label */}
+                    <div className="z-20 flex-shrink-0 px-4 py-1 bg-gradient-to-r from-cyan-950/90 via-blue-950/90 to-transparent border-r border-cyan-500/30 flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400"></span>
+                        </span>
+                        <span className="text-[10px] sm:text-xs font-mono font-black tracking-widest text-cyan-300 uppercase whitespace-nowrap">
+                            SYSTEM WORKFLOW
+                        </span>
+                    </div>
+
+                    {/* Smooth Continuous Marquee of Workflow Stages */}
+                    <div className="animate-marquee flex items-center space-x-6 text-[11px] font-mono tracking-wide">
+                        {[
+                            {
+                                step: "01",
+                                title: "EDGE SENSING",
+                                detail: "Pi 5 CSI Camera • VL53L0X LiDAR • Dual MPU6050 • MQ-3 Alcohol • NEO-7M GPS",
+                                badge: "HARDWARE",
+                                color: "text-cyan-300 border-cyan-500/40 bg-cyan-950/50"
+                            },
+                            {
+                                step: "02",
+                                title: "DUAL EDGE AI",
+                                detail: "YOLOv8 Road Hazard/Pothole Vision (Port 5002) + MediaPipe DMS Eye-Blink Fatigue Monitor",
+                                badge: "COMPUTER VISION",
+                                color: "text-purple-300 border-purple-500/40 bg-purple-950/50"
+                            },
+                            {
+                                step: "03",
+                                title: "TELEMETRY GATEWAY",
+                                detail: "High-Throughput Node.js Express REST API & SSE Real-time Synchronization (<50ms)",
+                                badge: "BACKEND",
+                                color: "text-emerald-300 border-emerald-500/40 bg-emerald-950/50"
+                            },
+                            {
+                                step: "04",
+                                title: "HYBRID CLOUD PERSISTENCE",
+                                detail: "Supabase Cloud PostgreSQL Database + Local SQLite Offline Resilient Vehicle Cache",
+                                badge: "DATABASE",
+                                color: "text-sky-300 border-sky-500/40 bg-sky-950/50"
+                            },
+                            {
+                                step: "05",
+                                title: "AUTONOMOUS 3D COCKPIT",
+                                detail: "React 19 Interactive 3D LiDAR Point Cloud + Live HUD Overlay + OpenAI AI Safety Companion",
+                                badge: "FRONTEND UI",
+                                color: "text-amber-300 border-amber-500/40 bg-amber-950/50"
+                            },
+                            {
+                                step: "06",
+                                title: "AUTONOMOUS SOS DISPATCH",
+                                detail: "Twilio Cloud SMS & A7670C Cellular Broadcast on 5x Critical Fatigue or Crash with GPS Link",
+                                badge: "SAFETY ESCALATION",
+                                color: "text-rose-300 border-rose-500/40 bg-rose-950/50"
+                            },
+                            {
+                                step: "07",
+                                title: "CIVIC GOVERNANCE",
+                                detail: "Government Road Authority Portal for Municipal Defect Triaging & Maintenance Heatmaps",
+                                badge: "MUNICIPAL CIVIC",
+                                color: "text-fuchsia-300 border-fuchsia-500/40 bg-fuchsia-950/50"
+                            }
+                        ].concat([
+                            {
+                                step: "01",
+                                title: "EDGE SENSING",
+                                detail: "Pi 5 CSI Camera • VL53L0X LiDAR • Dual MPU6050 • MQ-3 Alcohol • NEO-7M GPS",
+                                badge: "HARDWARE",
+                                color: "text-cyan-300 border-cyan-500/40 bg-cyan-950/50"
+                            },
+                            {
+                                step: "02",
+                                title: "DUAL EDGE AI",
+                                detail: "YOLOv8 Road Hazard/Pothole Vision (Port 5002) + MediaPipe DMS Eye-Blink Fatigue Monitor",
+                                badge: "COMPUTER VISION",
+                                color: "text-purple-300 border-purple-500/40 bg-purple-950/50"
+                            },
+                            {
+                                step: "03",
+                                title: "TELEMETRY GATEWAY",
+                                detail: "High-Throughput Node.js Express REST API & SSE Real-time Synchronization (<50ms)",
+                                badge: "BACKEND",
+                                color: "text-emerald-300 border-emerald-500/40 bg-emerald-950/50"
+                            },
+                            {
+                                step: "04",
+                                title: "HYBRID CLOUD PERSISTENCE",
+                                detail: "Supabase Cloud PostgreSQL Database + Local SQLite Offline Resilient Vehicle Cache",
+                                badge: "DATABASE",
+                                color: "text-sky-300 border-sky-500/40 bg-sky-950/50"
+                            },
+                            {
+                                step: "05",
+                                title: "AUTONOMOUS 3D COCKPIT",
+                                detail: "React 19 Interactive 3D LiDAR Point Cloud + Live HUD Overlay + OpenAI AI Safety Companion",
+                                badge: "FRONTEND UI",
+                                color: "text-amber-300 border-amber-500/40 bg-amber-950/50"
+                            },
+                            {
+                                step: "06",
+                                title: "AUTONOMOUS SOS DISPATCH",
+                                detail: "Twilio Cloud SMS & A7670C Cellular Broadcast on 5x Critical Fatigue or Crash with GPS Link",
+                                badge: "SAFETY ESCALATION",
+                                color: "text-rose-300 border-rose-500/40 bg-rose-950/50"
+                            },
+                            {
+                                step: "07",
+                                title: "CIVIC GOVERNANCE",
+                                detail: "Government Road Authority Portal for Municipal Defect Triaging & Maintenance Heatmaps",
+                                badge: "MUNICIPAL CIVIC",
+                                color: "text-fuchsia-300 border-fuchsia-500/40 bg-fuchsia-950/50"
+                            }
+                        ]).map((stage, idx) => (
+                            <div key={idx} className="flex items-center space-x-3 whitespace-nowrap">
+                                <div className={`flex items-center gap-2 px-2.5 py-1 rounded-md border ${stage.color}`}>
+                                    <span className="font-black text-[10px] px-1 py-0.2 rounded bg-white/10 text-white font-mono">
+                                        STEP {stage.step}
+                                    </span>
+                                    <span className="font-bold tracking-wider text-white">
+                                        {stage.title}:
+                                    </span>
+                                    <span className="font-mono text-slate-300 font-medium">
+                                        {stage.detail}
+                                    </span>
+                                    <span className="text-[9px] uppercase px-1.5 py-0.5 rounded font-extrabold bg-black/40 border border-white/10 text-slate-300">
+                                        {stage.badge}
+                                    </span>
+                                </div>
+                                <span className="text-cyan-400 font-black animate-pulse">➔</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
 
@@ -398,8 +510,8 @@ const LandingPage = ({ onEnterDashboard, onOpenGovPortal }) => {
                         <span className="text-gradient">I SARTHI</span>
                     </h1>
 
-                    <p className="text-base sm:text-lg md:text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed font-normal">
-                        All telemetry displayed below is directly synced from your physical Raspberry Pi sensors (MQ-3, MPU6050, NEO-7M, LiDAR & Camera) and recorded to Supabase.
+                    <p className="text-base sm:text-lg md:text-xl text-gray-200 max-w-3xl mx-auto leading-relaxed font-normal">
+                        Welcome to <span className="text-cyan-400 font-semibold">I-SARTHI</span> — your next-generation autonomous AI safety copilot and intelligent road ecosystem. Uniting real-time edge vision, 3D LiDAR proximity mapping, biometric driver fatigue monitoring, and instant emergency SOS dispatch to protect every journey.
                     </p>
 
                     {/* Real-time Hardware Readiness Banner */}
@@ -412,6 +524,19 @@ const LandingPage = ({ onEnterDashboard, onOpenGovPortal }) => {
                             <Database size={14} className="text-emerald-400" />
                             <span>Cloud Backend: <b>Supabase PostgreSQL</b></span>
                         </div>
+                    </div>
+
+                    {/* Prominent Big Size Launch App Button */}
+                    <div className="pt-6 flex justify-center items-center">
+                        <button 
+                            onClick={onEnterDashboard}
+                            className="relative group px-10 sm:px-14 py-4 sm:py-5 rounded-2xl font-black text-xl sm:text-2xl tracking-wider uppercase overflow-hidden bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 text-white shadow-[0_0_40px_rgba(6,182,212,0.55)] hover:shadow-[0_0_70px_rgba(6,182,212,0.85)] hover:scale-105 active:scale-95 transition-all duration-300 flex items-center gap-4 border-2 border-cyan-400/50 cursor-pointer"
+                        >
+                            <div className="absolute inset-0 w-1/2 h-full bg-white/20 transform -skew-x-12 animate-beam pointer-events-none"></div>
+                            <Zap size={28} className="text-yellow-300 animate-bounce" />
+                            <span>LAUNCH APP</span>
+                            <ArrowRight size={26} className="text-cyan-200 group-hover:translate-x-2 transition-transform duration-300" />
+                        </button>
                     </div>
                 </div>
 

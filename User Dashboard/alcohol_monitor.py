@@ -9,12 +9,11 @@ try:
 except ImportError:
     IS_RPI = False
 
-# --- Config ---
-# Change this to your laptop's Wi-Fi IP or localhost if running locally
-DEFAULT_SERVER_URL = "http://10.168.213.214:5000/api/alcohol"
+import os
+DEFAULT_SERVER_URL = os.getenv("ISARTHI_ALCOHOL_URL", "http://10.58.198.112:5000/api/alcohol")
 SENSOR_PIN = 26  # GPIO 26 (Pin 37)
 
-# Allow passing custom server URL as CLI argument: python alcohol_monitor.py http://10.168.213.214:5000/api/alcohol
+# Allow passing custom server URL as CLI argument: python alcohol_monitor.py http://localhost:5000/api/alcohol
 SERVER_URL = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_SERVER_URL
 
 if IS_RPI:

@@ -254,9 +254,9 @@ const Emergency = ({ user }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     type: 'manual',
-                    message: `🚨 CRITICAL SOS: Driver ${user?.full_name || user?.username || 'Pilot'} triggered Emergency SOS! Coordinates: ${location?.lat || '27.0308'}, ${location?.lng || '75.8937'}. Immediate assistance required.`,
-                    lat: location?.lat || 27.0308,
-                    lng: location?.lng || 75.8937,
+                    message: `🚨 CRITICAL SOS: Driver ${user?.full_name || user?.username || 'Pilot'} triggered Emergency SOS! Coordinates: ${location?.lat || '26.823287'}, ${location?.lng || '75.866808'}. Immediate assistance required.`,
+                    lat: location?.lat || 26.823287,
+                    lng: location?.lng || 75.866808,
                     contacts: contacts
                 })
             });
@@ -464,7 +464,7 @@ const Emergency = ({ user }) => {
 
                         <div className="p-3.5 rounded-2xl bg-black/50 border border-white/5 text-center font-mono">
                             <div className="text-lg sm:text-xl font-bold text-white tracking-wide">
-                                {location ? `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : '27.03080, 75.89371'}
+                                {location ? `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : '26.82329, 75.86681'}
                             </div>
                             <div className="text-[10px] text-gray-400 mt-1">Satellite Lock: 3D Fix</div>
                         </div>
@@ -483,7 +483,7 @@ const Emergency = ({ user }) => {
                             <motion.a
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
-                                href={`https://www.google.com/maps?q=${location?.lat || 27.0308},${location?.lng || 75.8937}`}
+                                href={`https://www.google.com/maps?q=${location?.lat || 26.823287},${location?.lng || 75.866808}`}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-all shadow-lg"

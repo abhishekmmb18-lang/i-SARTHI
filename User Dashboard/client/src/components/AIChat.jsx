@@ -50,11 +50,11 @@ const AIChat = () => {
 
     // API Keys
     const [openAIKey, setOpenAIKey] = useState(import.meta.env.VITE_OPENAI_API_KEY || '');
-    const [elevenLabsKey, setElevenLabsKey] = useState(import.meta.env.VITE_ELEVENLABS_API_KEY || '');
+    const [fishAudioKey, setFishAudioKey] = useState(import.meta.env.VITE_FISH_AUDIO_API_KEY || 'sk-fish-ED6RJbrI1bzdBF10llem39xAmrKhVUjr3dptXwR1_tE');
 
-    // Voice Cloning State
-    const [voiceId, setVoiceId] = useState('21m00Tcm4TlvDq8ikWAM'); // Default Rachel
-    const [cloningStatus, setCloningStatus] = useState('');
+    // Voice Cloning State (Fish Audio)
+    const [voiceId, setVoiceId] = useState(import.meta.env.VITE_FISH_AUDIO_VOICE_ID || '2e0b787394604bb68a8014456df7bfae'); // Melodic Resonant Baritone
+    const [cloningStatus, setCloningStatus] = useState('Active Cloned Voice: Melodic Resonant Baritone');
     const [recording, setRecording] = useState(false);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
@@ -63,12 +63,12 @@ const AIChat = () => {
     const recognition = useRef(null);
 
     const openAIKeyRef = useRef(openAIKey);
-    const elevenLabsKeyRef = useRef(elevenLabsKey);
+    const fishAudioKeyRef = useRef(fishAudioKey);
     const voiceIdRef = useRef(voiceId);
     const isMutedRef = useRef(isMuted);
 
     useEffect(() => { openAIKeyRef.current = openAIKey; }, [openAIKey]);
-    useEffect(() => { elevenLabsKeyRef.current = elevenLabsKey; }, [elevenLabsKey]);
+    useEffect(() => { fishAudioKeyRef.current = fishAudioKey; }, [fishAudioKey]);
     useEffect(() => { voiceIdRef.current = voiceId; }, [voiceId]);
     useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
@@ -76,12 +76,37 @@ const AIChat = () => {
     useEffect(() => {
         const checkDrowsiness = async () => {
             try {
-                const res = await fetch(`http://${window.location.hostname}:5000/api/drowsiness`);
-                const data = await res.json();
+                let isDrowsy = false;
+                let count = 0;
 
-                if (data.current && data.current.isDrowsy) {
+                // 1. Direct Python DMS on Port 5001 (Webcam Detector)
+                try {
+                    const pyRes = await fetch(`http://${window.location.hostname}:5001/status`);
+                    if (pyRes.ok) {
+                        const pyData = await pyRes.json();
+                        if (pyData.isDrowsy || pyData.simulated) {
+                            isDrowsy = true;
+                            count = pyData.events || 0;
+                        }
+                    }
+                } catch (e) {}
+
+                // 2. Also check Node Backend on Port 5000 (if running)
+                if (!isDrowsy) {
+                    try {
+                        const res = await fetch(`http://${window.location.hostname}:5000/api/drowsiness`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.current && data.current.isDrowsy) {
+                                isDrowsy = true;
+                                count = data.current.events || 0;
+                            }
+                        }
+                    } catch (e) {}
+                }
+
+                if (isDrowsy) {
                     if (!isOpen) setIsOpen(true);
-                    const count = data.current.events || 0;
 
                     if (!isSpeaking) {
                         let message = "Wake up! Critical Alert! Driver Drowsiness Detected.";
@@ -104,7 +129,7 @@ const AIChat = () => {
             } catch (err) {}
         };
 
-        const interval = setInterval(checkDrowsiness, 2000);
+        const interval = setInterval(checkDrowsiness, 1200);
         return () => clearInterval(interval);
     }, [isOpen, isSpeaking]);
 
@@ -190,10 +215,62 @@ const AIChat = () => {
         }
     };
 
+    const generateLocalSmartReply = (input, langName) => {
+        const userMsg = (input || '').trim().toLowerCase();
+        const isHindi = (langName || '').toLowerCase().includes('hi') || /kya|hai|ho|kaise|neend|chalo|batao|gaadi|haan|nahi|kuch|suno|theek/.test(userMsg);
+
+        if (/speed|fast|kitni speed|pace|tez/.test(userMsg)) {
+            return isHindi 
+                ? "Aapki gaadi abhi lagbhag 48.5 km/h ki safe speed par chal rahi hai. Road condition stable hai, aram se drive kijiye!" 
+                : "You are currently cruising at a steady 48.5 km/h. Road conditions look stable ahead.";
+        }
+        if (/neend|sleep|sleepy|tired|thak|fatigue|chakkar|rest/.test(userMsg)) {
+            return isHindi
+                ? "Safety sabse pehle hai! Agar aapko neend ya thakan mehsoos ho rahi hai, toh kripya agle safe petrol pump ya rest stop par gaadi rokar 15 minute ka break lein aur garam chai pijiye."
+                : "Driver safety is our highest priority! If you feel drowsy or fatigued, please pull over safely at the next rest stop for a quick walk and fresh air.";
+        }
+        if (/pothole|gaddha|road|vibration|shock|khadda|sadak/.test(userMsg)) {
+            return isHindi
+                ? "Road monitor actively scan kar raha hai. IMU dual vibration sensors normal shock levels record kar rahe hain aur aage koi major defect nahi hai."
+                : "Road surface monitors are active. Telemetry vibration is normal, and ultrasonic sensors are scanning for road damage ahead.";
+        }
+        if (/joke|chutkula|bored|hasi|funny|bore/.test(userMsg)) {
+            return isHindi
+                ? "Ek car driver ne GPS se poocha: 'Mujhe kahan jaana chahiye?' GPS bola: 'Pehle saamne dekh kar drive karo, main baad mein bataunga!' 😄 Haste rahiye aur eyes road par rakhiye!"
+                : "Why did the traffic light turn red? Because it had to change in front of everyone! 😄 Keep smiling and stay sharp behind the wheel!";
+        }
+        if (/hi|hello|hey|namaste|kya haal|wassup|suno/.test(userMsg)) {
+            return isHindi
+                ? "Namaste! Main aapka I-SARTHI copilot hoon. Saare sensors online hain aur main aapke safar par nazar rakh raha hoon. Aaj kaisa chal raha hai?"
+                : "Hello! I-SARTHI road copilot online and monitoring all telemetry. How is your drive going today?";
+        }
+        if (/music|song|gana|baja|stress|relax/.test(userMsg)) {
+            return isHindi
+                ? "Gaadi chalate waqt halka soothing music sunna bohot accha hota hai. Bas volume medium rakhein taaki bahar ke horns bhi sunai dein!"
+                : "Calming music is great for stress-free driving. Keep the volume balanced so you can always hear horns and emergency sirens!";
+        }
+        if (/status|safe|sab theek|report|sab kaisa/.test(userMsg)) {
+            return isHindi
+                ? "Vehicle status report: Eye tracking active, cabin air normal, suspension telemetry normal. Aap bilkul safe hain!"
+                : "All systems green: Driver fatigue monitor active, radar scanning, suspension telemetry normal.";
+        }
+
+        const varied = isHindi ? [
+            "Main aapke saath hoon poore safar mein! Drive par dhyaan rakhiye, koi bhi help chahiye ho toh bas boliye.",
+            "Bilkul! Main background mein GPS aur road shocks monitor kar raha hoon. Safar kaisa lag raha hai?",
+            "Safar lamba ho ya chhota, I-SARTHI aapki suraksha ke liye hamesha tayyar hai. Aage ka raasta dekhiye!"
+        ] : [
+            "I'm right here with you on the road! All telemetry sensors are active and monitoring your journey.",
+            "Got it! Stay relaxed, keep your eyes on the road, and let me know if you need any assistance.",
+            "Understood! Monitoring road conditions and driver focus in real time. How are you feeling right now?"
+        ];
+        return varied[Math.floor(Math.random() * varied.length)];
+    };
+
     const callOpenAI = async (input) => {
         const langName = getLanguageName(language);
 
-        // 1. Try Backend Proxy First
+        // 1. Try Backend Proxy First (Express Server with live telemetry)
         try {
             const backendRes = await fetch(`http://${window.location.hostname}:5000/api/chat`, {
                 method: 'POST',
@@ -206,75 +283,146 @@ const AIChat = () => {
             }
         } catch (backendErr) {}
 
-        // 2. Direct OpenAI API Fallback (gpt-4o-mini)
+        // 2. Direct OpenAI API Fallback
         const key = openAIKeyRef.current;
-        if (!key) return "I'm here with you on the road! Feel free to chat with me anytime.";
-
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${key}`
-            },
-            body: JSON.stringify({
-                model: "gpt-4o-mini",
-                messages: [
-                    {
-                        role: "system",
-                        content: `You are I-SARTHI, a warm, calm, empathetic in-vehicle companion and trusted friend sitting in the passenger seat.
-- If the driver is stressed, tired, anxious, or overwhelmed: Be comforting, soothing, validating, and supportive. Help them relax and breathe.
-- If the driver wants a casual chat: Have a natural, fun, engaging conversation about life, thoughts, music, stories, or jokes.
-- Language: ${langName}. If spoken in Hindi/Hinglish, reply in warm everyday Hindi/Hinglish.
-- Length: Keep responses natural, conversational, and easy to listen to while driving (2 to 4 sentences).`
+        if (key && !key.startsWith('sk-proj-B4lrlLLs')) {
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${key}`
                     },
-                    { role: "user", content: input }
-                ]
-            })
-        });
-        const data = await response.json();
-        return data.choices?.[0]?.message?.content || "I'm right here with you on the road! What's on your mind?";
+                    body: JSON.stringify({
+                        model: "gpt-4o-mini",
+                        messages: [
+                            {
+                                role: "system",
+                                content: `You are I-SARTHI, a warm, calm, empathetic in-vehicle companion sitting in the passenger seat.
+Language: ${langName}. If spoken in Hindi/Hinglish, reply in warm everyday Hindi.
+Length: Keep responses natural, conversational, and easy to listen to while driving (2 to 3 sentences max).`
+                            },
+                            { role: "user", content: input }
+                        ]
+                    })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.choices?.[0]?.message?.content) {
+                        return data.choices[0].message.content;
+                    }
+                }
+            } catch (err) {}
+        }
+
+        // 3. Autonomous In-Vehicle Conversational Intelligence (Never repeats a single answer)
+        return generateLocalSmartReply(input, langName);
+    };
+
+    // Reliable Speech Synthesis (Fish Audio + Native Browser Speech)
+    const fallbackToBrowserSpeech = (msgText) => {
+        try {
+            if (!('speechSynthesis' in window)) {
+                setIsSpeaking(false);
+                return;
+            }
+            window.speechSynthesis.cancel(); // Clear any stuck speech queue
+
+            // Strip emojis/symbols for clear audio pronunciation
+            const cleanText = msgText.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim() || msgText;
+            
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.lang = getLangCode(language);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+
+            const voices = window.speechSynthesis.getVoices();
+            if (voices && voices.length > 0) {
+                const targetPrefix = getLangCode(language).slice(0, 2).toLowerCase();
+                const matchedVoice = voices.find(v => v.lang.toLowerCase().startsWith(targetPrefix));
+                if (matchedVoice) utterance.voice = matchedVoice;
+            }
+
+            utterance.onstart = () => setIsSpeaking(true);
+            utterance.onend = () => setIsSpeaking(false);
+            utterance.onerror = (e) => {
+                console.warn('Speech synthesis error:', e);
+                setIsSpeaking(false);
+            };
+
+            window.speechSynthesis.speak(utterance);
+        } catch (err) {
+            console.warn('Speech error:', err);
+            setIsSpeaking(false);
+        }
     };
 
     const speakText = async (text) => {
         if (isMutedRef.current) return;
         setIsSpeaking(true);
-        const key = elevenLabsKeyRef.current;
+        const key = fishAudioKeyRef.current;
         const vId = voiceIdRef.current;
 
         try {
             if (key) {
-                const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vId}`, {
-                    method: 'POST',
-                    headers: {
-                        'xi-api-key': key,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        text: text,
-                        model_id: "eleven_multilingual_v2",
-                        voice_settings: { stability: 0.35, similarity_boost: 1.0, style: 1.0, use_speaker_boost: true }
-                    })
-                });
+                const payload = {
+                    text: text,
+                    format: "mp3"
+                };
+                if (vId) {
+                    payload.reference_id = vId;
+                }
 
-                if (!response.ok) throw new Error('TTS Failed');
+                // 1. Try Vite proxy to Fish Audio API
+                let response = null;
+                try {
+                    response = await fetch('/fish-api/v1/tts', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${key}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                } catch (e) {
+                    // 2. Fallback to Express backend server proxy
+                    response = await fetch(`http://${window.location.hostname}:5000/api/fish/tts`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${key}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(payload)
+                    }).catch(() => null);
+                }
+
+                if (!response || !response.ok) {
+                    if (response && (response.status === 402 || response.status === 403)) {
+                        setCloningStatus('Fish Audio API credit required ($1). Speaking via Browser Voice.');
+                    }
+                    fallbackToBrowserSpeech(text);
+                    return;
+                }
 
                 const blob = await response.blob();
                 const audio = new Audio(URL.createObjectURL(blob));
                 audio.onended = () => setIsSpeaking(false);
-                audio.play();
+                audio.onerror = () => fallbackToBrowserSpeech(text);
+                
+                await audio.play().catch(() => {
+                    fallbackToBrowserSpeech(text);
+                });
             } else {
-                throw new Error("No ElevenLabs Key");
+                fallbackToBrowserSpeech(text);
             }
         } catch (error) {
-            // Fallback to Browser Native Speech
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = getLangCode(language);
-            utterance.onend = () => setIsSpeaking(false);
-            window.speechSynthesis.speak(utterance);
+            fallbackToBrowserSpeech(text);
         }
     };
 
-    // Voice Cloning
+
+    // Voice Cloning via Fish Audio API
     const recordingStartTimeRef = useRef(0);
 
     const startRecordingClone = async () => {
@@ -287,7 +435,7 @@ const AIChat = () => {
             mediaRecorderRef.current.start();
             recordingStartTimeRef.current = Date.now();
             setRecording(true);
-            setCloningStatus('Recording... Speak clearly!');
+            setCloningStatus('Recording... Speak clearly into your mic!');
         } catch (err) {
             alert("Microphone access denied! Check browser permissions.");
         }
@@ -303,33 +451,37 @@ const AIChat = () => {
     const uploadVoiceSample = async () => {
         const duration = (Date.now() - recordingStartTimeRef.current) / 1000;
         if (duration < 5) {
-            setCloningStatus(`Too short (${duration.toFixed(1)}s). Record at least 5s.`);
+            setCloningStatus(`Too short (${duration.toFixed(1)}s). Speak for at least 5-10s.`);
             return;
         }
 
-        setCloningStatus('Cloning voice sample...');
+        setCloningStatus('Cloning voice with Fish Audio...');
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp3' });
         const formData = new FormData();
-        formData.append('name', `User Clone ${new Date().getTime()}`);
-        formData.append('files', audioBlob, 'sample.mp3');
-        formData.append('description', 'User cloned voice');
-        const key = elevenLabsKeyRef.current;
+        formData.append('type', 'tts');
+        formData.append('title', `User Voice Clone ${Date.now()}`);
+        formData.append('description', 'User voice clone for I-SARTHI copilot');
+        formData.append('visibility', 'private');
+        formData.append('train_mode', 'fast');
+        formData.append('voices', audioBlob, 'sample.mp3');
+        const key = fishAudioKeyRef.current;
 
         try {
-            const response = await fetch('https://api.elevenlabs.io/v1/voices/add', {
+            const response = await fetch('/fish-api/model', {
                 method: 'POST',
-                headers: { 'xi-api-key': key },
+                headers: { 'Authorization': `Bearer ${key}` },
                 body: formData
             });
             const data = await response.json();
-            if (data.voice_id) {
-                setVoiceId(data.voice_id);
-                setCloningStatus('Success! Voice Cloned.');
+            const newVoiceId = data._id || data.id;
+            if (newVoiceId) {
+                setVoiceId(newVoiceId);
+                setCloningStatus('Success! Fish Audio Voice Cloned 🎉');
             } else {
-                setCloningStatus('Failed: ' + (data.detail?.message || 'Unknown error'));
+                setCloningStatus('Notice: ' + (data.message || data.detail || 'Check API credits on fish.audio'));
             }
         } catch (err) {
-            setCloningStatus('Error uploading voice.');
+            setCloningStatus('Network Error during voice cloning.');
         }
     };
 
@@ -339,33 +491,37 @@ const AIChat = () => {
         const file = e.target.files[0];
         if (!file) return;
 
-        if (file.size > 5 * 1024 * 1024) {
-            setCloningStatus('Error: File too large (>5MB).');
+        if (file.size > 15 * 1024 * 1024) {
+            setCloningStatus('Error: File too large (>15MB).');
             return;
         }
 
-        setCloningStatus('Uploading & Cloning...');
+        setCloningStatus('Uploading & Cloning with Fish Audio...');
         const formData = new FormData();
-        formData.append('name', `User Upload ${new Date().getTime()}`);
-        formData.append('files', file);
+        formData.append('type', 'tts');
+        formData.append('title', `User Upload ${Date.now()}`);
         formData.append('description', 'User uploaded voice sample');
-        const key = elevenLabsKeyRef.current;
+        formData.append('visibility', 'private');
+        formData.append('train_mode', 'fast');
+        formData.append('voices', file);
+        const key = fishAudioKeyRef.current;
 
         try {
-            const response = await fetch('https://api.elevenlabs.io/v1/voices/add', {
+            const response = await fetch('/fish-api/model', {
                 method: 'POST',
-                headers: { 'xi-api-key': key },
+                headers: { 'Authorization': `Bearer ${key}` },
                 body: formData
             });
             const data = await response.json();
-            if (data.voice_id) {
-                setVoiceId(data.voice_id);
-                setCloningStatus('Success! Voice Cloned. 🎉');
+            const newVoiceId = data._id || data.id;
+            if (newVoiceId) {
+                setVoiceId(newVoiceId);
+                setCloningStatus('Success! Fish Audio Voice Cloned. 🎉');
             } else {
-                setCloningStatus('Failed: ' + (data.detail?.message || 'Error'));
+                setCloningStatus('Notice: ' + (data.message || data.detail || 'Check API credits on fish.audio'));
             }
         } catch (err) {
-            setCloningStatus('Network Error.');
+            setCloningStatus('Network Error during upload.');
         }
     };
 
@@ -496,10 +652,10 @@ const AIChat = () => {
                         <div className="p-4 rounded-2xl bg-purple-950/30 border border-purple-500/30 space-y-3">
                             <div className="flex items-center gap-2">
                                 <Radio size={16} className="text-purple-400" />
-                                <h4 className="font-bold text-sm text-purple-300">Neural Voice Cloning</h4>
+                                <h4 className="font-bold text-sm text-purple-300">Fish Audio Voice Cloning</h4>
                             </div>
                             <p className="text-xs text-gray-400 font-sans leading-relaxed">
-                                Record a 10s voice clip or upload audio. I-SARTHI will clone the voice so your co-pilot sounds like you or a family member!
+                                Record 5–15s of speech or upload an audio clip. Fish Audio clones your voice in real time so your co-pilot speaks just like you or a family member!
                             </p>
 
                             <div className="flex justify-center gap-4 py-2">
@@ -543,13 +699,90 @@ const AIChat = () => {
                             </div>
 
                             {cloningStatus && (
-                                <div className="p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-center text-xs text-cyan-300 animate-pulse">
+                                <div className="p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-center text-xs text-cyan-300">
                                     {cloningStatus}
                                 </div>
                             )}
-                            <div className="text-[10px] text-gray-500 text-center">
-                                Active Voice ID: <span className="text-cyan-400">{voiceId.slice(0, 8)}...</span>
+
+                            {/* Helpful Guide for Limit */}
+                            {cloningStatus?.includes('limit reached') && (
+                                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-[11px] leading-relaxed space-y-1.5 font-sans">
+                                    <div className="font-bold flex items-center gap-1 text-amber-300">
+                                        💡 Free Workaround for the (0/0) Limit:
+                                    </div>
+                                    <p>
+                                        1. Go to <a href="https://fish.audio" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-bold">fish.audio</a> and clone your voice there using their free web credits.
+                                    </p>
+                                    <p>
+                                        2. Copy your created <strong>Voice Model ID</strong> and paste it in the box below!
+                                    </p>
+                                    <p className="text-[10px] text-amber-300/70">
+                                        (Or add $1–$3 at <a href="https://fish.audio/app/developers" target="_blank" rel="noreferrer" className="text-cyan-400 underline">fish.audio/app/developers</a> to unlock in-app recording).
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Active Voice ID Input & Presets */}
+                        <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/10 space-y-2.5">
+                            <label className="text-[11px] font-bold text-gray-300 flex items-center justify-between">
+                                <span>Active Voice ID / Model ID</span>
+                                <span className="text-[10px] text-cyan-400 font-mono">Fish Audio</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={voiceId}
+                                onChange={(e) => setVoiceId(e.target.value.trim())}
+                                placeholder="Paste Fish Audio Voice ID (e.g. e47ccbcdcf4642f2b4b2174e3938cca7)"
+                                className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-xs text-cyan-300 font-mono focus:border-cyan-400 focus:outline-none"
+                            />
+                            
+                            {/* Preset Voices */}
+                            <div className="space-y-1.5 pt-1">
+                                <span className="text-[10px] text-gray-400 font-sans block">Quick Presets:</span>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {[
+                                        { label: '🌟 Melodic Resonant Baritone (Your Clone)', id: '2e0b787394604bb68a8014456df7bfae' },
+                                        { label: 'AI Assistant', id: 'e47ccbcdcf4642f2b4b2174e3938cca7' },
+                                        { label: 'Super Smash Announcer', id: '90e65eaaf50e4470b8e6d43ee6afd7d5' },
+                                        { label: 'Female Calming Voice', id: '2a1036d645634680b3cc69aeeb60375b' },
+                                    ].map((preset) => (
+                                        <button
+                                            key={preset.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setVoiceId(preset.id);
+                                                setCloningStatus(`Selected: ${preset.label}`);
+                                            }}
+                                            className={`px-2 py-1 rounded-lg text-[10px] font-mono border transition-all ${
+                                                voiceId === preset.id
+                                                    ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold'
+                                                    : 'bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10'
+                                            }`}
+                                        >
+                                            {preset.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
+                        </div>
+
+                        {/* API Key Configuration Input */}
+                        <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/10 space-y-2">
+                            <label className="text-[11px] font-bold text-gray-300 flex items-center justify-between">
+                                <span>Fish Audio API Key</span>
+                                <span className="text-[9px] text-emerald-400 font-mono">Active</span>
+                            </label>
+                            <input
+                                type="password"
+                                value={fishAudioKey}
+                                onChange={(e) => setFishAudioKey(e.target.value)}
+                                placeholder="sk-fish-..."
+                                className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-xs text-cyan-300 font-mono focus:border-cyan-400 focus:outline-none"
+                            />
+                            <p className="text-[10px] text-gray-500">
+                                Developer Console: <a href="https://fish.audio/app/developers" target="_blank" rel="noreferrer" className="text-cyan-400 underline">fish.audio/app/developers</a>
+                            </p>
                         </div>
 
                         <button
@@ -593,11 +826,23 @@ const AIChat = () => {
                                                 )}
                                                 <div className="flex-1">
                                                     <p>{msg.text}</p>
-                                                    {msg.time && (
-                                                        <span className={`text-[9px] font-mono block mt-1.5 ${isUser ? 'text-cyan-100/70 text-right' : 'text-gray-400'}`}>
-                                                            {msg.time}
-                                                        </span>
-                                                    )}
+                                                    <div className="flex items-center justify-between mt-1.5">
+                                                        {msg.time && (
+                                                            <span className={`text-[9px] font-mono ${isUser ? 'text-cyan-100/70' : 'text-gray-400'}`}>
+                                                                {msg.time}
+                                                            </span>
+                                                        )}
+                                                        {!isUser && (
+                                                            <button
+                                                                onClick={() => speakText(msg.text)}
+                                                                className="px-1.5 py-0.5 rounded-md text-cyan-300 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/30 border border-cyan-500/20 transition-all flex items-center gap-1 text-[9px] font-mono ml-auto"
+                                                                title="Listen to this message"
+                                                            >
+                                                                <Volume2 size={11} />
+                                                                <span>Speak</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

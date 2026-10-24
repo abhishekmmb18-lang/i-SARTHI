@@ -104,7 +104,7 @@ export default function RoadMapTab({
             }
 
             const map = L.map(mapContainerRef.current, {
-                center: [27.0308, 75.8937],
+                center: [26.823287, 75.866808],
                 zoom: 6,
                 zoomControl: true,
                 scrollWheelZoom: true

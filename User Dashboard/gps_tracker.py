@@ -3,8 +3,9 @@ import requests
 import serial
 import pynmea2
 
+import os
 # --- Config ---
-SERVER_URL = "http://10.137.73.214:5000/api/location"
+SERVER_URL = os.getenv("ISARTHI_GPS_URL", "http://10.58.198.112:5000/api/location")
 # UART Port on Raspberry Pi
 # UART Port on Raspberry Pi
 # GSM is using UART0 (GPIO 14/15)

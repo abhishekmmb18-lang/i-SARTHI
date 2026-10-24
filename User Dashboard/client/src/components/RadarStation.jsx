@@ -22,7 +22,11 @@ import {
     ShieldAlert,
     RadioTower,
     Scan,
-    RadioReceiver
+    RadioReceiver,
+    Eye,
+    Layers,
+    Trash2,
+    RefreshCw
 } from 'lucide-react';
 
 // 60 FPS Cyber Highway Background
@@ -44,7 +48,7 @@ const CyberHighwayCanvas = () => {
         };
         window.addEventListener('resize', handleResize);
 
-        const numLines = 50;
+        const numLines = 45;
         const lines = [];
         for (let i = 0; i < numLines; i++) {
             lines.push({
@@ -63,23 +67,22 @@ const CyberHighwayCanvas = () => {
             ctx.fillRect(0, 0, width, height);
 
             offset += 0.025;
-
             const horizonY = height * 0.52;
             const perspectiveDist = 280;
 
             for (let x = -width; x < width * 2; x += 120) {
                 ctx.beginPath();
-                ctx.strokeStyle = 'rgba(6, 182, 212, 0.1)';
+                ctx.strokeStyle = 'rgba(6, 182, 212, 0.08)';
                 ctx.moveTo(x, height);
                 ctx.lineTo(width / 2, horizonY);
                 ctx.stroke();
             }
 
-            const numHoriz = 14;
+            const numHoriz = 12;
             for (let i = 0; i < numHoriz; i++) {
                 const progress = ((i + (offset % 1)) / numHoriz);
                 const lineY = horizonY + Math.pow(progress, 2.4) * (height - horizonY);
-                const alpha = Math.min(progress * 0.35, 0.25);
+                const alpha = Math.min(progress * 0.35, 0.2);
 
                 ctx.beginPath();
                 ctx.strokeStyle = `rgba(59, 130, 246, ${alpha})`;
@@ -93,7 +96,7 @@ const CyberHighwayCanvas = () => {
 
             for (let i = 0; i < lines.length; i++) {
                 const p = lines[i];
-                p.z -= 9;
+                p.z -= 8;
                 if (p.z <= 0) {
                     p.z = width;
                     p.x = (Math.random() - 0.5) * width * 2;
@@ -105,7 +108,7 @@ const CyberHighwayCanvas = () => {
                 const py = p.y * k + cy;
 
                 if (px >= 0 && px <= width && py >= 0 && py <= height) {
-                    const size = Math.max(0.7, (1 - p.z / width) * 2.8);
+                    const size = Math.max(0.7, (1 - p.z / width) * 2.5);
                     const alpha = (1 - p.z / width);
 
                     ctx.beginPath();
@@ -113,17 +116,9 @@ const CyberHighwayCanvas = () => {
                     ctx.globalAlpha = alpha;
                     ctx.arc(px, py, size, 0, Math.PI * 2);
                     ctx.fill();
-
-                    ctx.beginPath();
-                    ctx.strokeStyle = p.color;
-                    ctx.lineWidth = size * 0.7;
-                    ctx.moveTo(px, py);
-                    ctx.lineTo(p.x * (perspectiveDist / (p.z + p.len)) + cx, p.y * (perspectiveDist / (p.z + p.len)) + cy);
-                    ctx.stroke();
                 }
             }
             ctx.globalAlpha = 1;
-
             animationFrameId = requestAnimationFrame(render);
         };
 
@@ -143,11 +138,343 @@ const CyberHighwayCanvas = () => {
     );
 };
 
+// ==========================================
+// FULL 3D INTERACTIVE LIDAR POINT CLOUD CANVAS
+// ==========================================
+const Lidar3DPointCloudCanvas = ({ points, activeAngle, activeDistance, viewMode, autoRotate }) => {
+    const canvasRef = useRef(null);
+    const rotationRef = useRef({ yaw: 0.35, pitch: 0.45 });
+    const isDraggingRef = useRef(false);
+    const lastMouseRef = useRef({ x: 0, y: 0 });
+    const zoomRef = useRef(1.0);
+
+    // Mouse orbit controls
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const onMouseDown = (e) => {
+            isDraggingRef.current = true;
+            lastMouseRef.current = { x: e.clientX, y: e.clientY };
+        };
+
+        const onMouseMove = (e) => {
+            if (!isDraggingRef.current) return;
+            const dx = e.clientX - lastMouseRef.current.x;
+            const dy = e.clientY - lastMouseRef.current.y;
+            rotationRef.current.yaw += dx * 0.008;
+            rotationRef.current.pitch = Math.max(-0.2, Math.min(1.4, rotationRef.current.pitch + dy * 0.008));
+            lastMouseRef.current = { x: e.clientX, y: e.clientY };
+        };
+
+        const onMouseUp = () => {
+            isDraggingRef.current = false;
+        };
+
+        const onWheel = (e) => {
+            e.preventDefault();
+            zoomRef.current = Math.max(0.5, Math.min(2.5, zoomRef.current - e.deltaY * 0.0015));
+        };
+
+        canvas.addEventListener('mousedown', onMouseDown);
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        canvas.addEventListener('wheel', onWheel, { passive: false });
+
+        return () => {
+            canvas.removeEventListener('mousedown', onMouseDown);
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+            canvas.removeEventListener('wheel', onWheel);
+        };
+    }, []);
+
+    // Set fixed view angles per viewMode
+    useEffect(() => {
+        if (viewMode === 'top') {
+            rotationRef.current = { yaw: 0, pitch: 1.57 }; // 90 deg down
+            zoomRef.current = 1.0;
+        } else if (viewMode === 'fpv') {
+            rotationRef.current = { yaw: 0, pitch: 0.08 }; // Cockpit forward
+            zoomRef.current = 1.35;
+        } else {
+            rotationRef.current = { yaw: 0.4, pitch: 0.5 }; // 3D Orbit
+        }
+    }, [viewMode]);
+
+    // Render loop
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let animId;
+
+        const render = () => {
+            const width = canvas.width = canvas.parentElement.clientWidth;
+            const height = canvas.height = canvas.parentElement.clientHeight;
+            ctx.clearRect(0, 0, width, height);
+
+            if (autoRotate && !isDraggingRef.current && viewMode === '3d') {
+                rotationRef.current.yaw += 0.005;
+            }
+
+            const yaw = rotationRef.current.yaw;
+            const pitch = rotationRef.current.pitch;
+            const zoom = zoomRef.current;
+
+            const cx = width / 2;
+            const cy = height / 2 + (viewMode === 'fpv' ? 60 : 20);
+
+            // 3D Perspective Projection function
+            const project3D = (x, y, z) => {
+                // Rotate around Z axis (yaw)
+                const cosY = Math.cos(yaw);
+                const sinY = Math.sin(yaw);
+                const x1 = x * cosY - y * sinY;
+                const y1 = x * sinY + y * cosY;
+                const z1 = z;
+
+                // Rotate around X axis (pitch)
+                const cosP = Math.cos(pitch);
+                const sinP = Math.sin(pitch);
+                const y2 = y1 * cosP - z1 * sinP;
+                const z2 = y1 * sinP + z1 * cosP;
+                const x2 = x1;
+
+                // Perspective camera distance
+                const fov = 420 * zoom;
+                const cameraDist = 340;
+                const depth = y2 + cameraDist;
+                if (depth <= 10) return null;
+
+                const scale = fov / depth;
+                return {
+                    x: cx + x2 * scale,
+                    y: cy - z2 * scale,
+                    scale: scale,
+                    depth: depth
+                };
+            };
+
+            // 1. Draw 3D Ground Grid Lines
+            ctx.strokeStyle = 'rgba(6, 182, 212, 0.12)';
+            ctx.lineWidth = 1;
+            const gridSize = 220;
+            const step = 40;
+
+            for (let g = -gridSize; g <= gridSize; g += step) {
+                const p1 = project3D(g, -gridSize, 0);
+                const p2 = project3D(g, gridSize, 0);
+                if (p1 && p2) {
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                }
+
+                const p3 = project3D(-gridSize, g, 0);
+                const p4 = project3D(gridSize, g, 0);
+                if (p3 && p4) {
+                    ctx.beginPath();
+                    ctx.moveTo(p3.x, p3.y);
+                    ctx.lineTo(p4.x, p4.y);
+                    ctx.stroke();
+                }
+            }
+
+            // 2. Draw Concentric 3D Range Rings (50cm, 100cm, 150cm, 200cm)
+            const ringRadii = [50, 100, 150, 200];
+            ringRadii.forEach((r, idx) => {
+                ctx.beginPath();
+                ctx.strokeStyle = idx === 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(6, 182, 212, 0.2)';
+                ctx.setLineDash([4, 4]);
+
+                let first = true;
+                for (let a = 0; a <= Math.PI * 2 + 0.1; a += 0.12) {
+                    const rx = Math.cos(a) * r;
+                    const ry = Math.sin(a) * r;
+                    const pr = project3D(rx, ry, 0);
+                    if (pr) {
+                        if (first) {
+                            ctx.moveTo(pr.x, pr.y);
+                            first = false;
+                        } else {
+                            ctx.lineTo(pr.x, pr.y);
+                        }
+                    }
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+            });
+
+            // 3. Draw 3D Wireframe Cyber Car at Center (0, 0, 0)
+            const carW = 34; // Half-width
+            const carL = 60; // Half-length
+            const carH = 22; // Height
+
+            const carCorners = [
+                // Bottom chassis
+                [-carW, -carL, 4], [carW, -carL, 4], [carW, carL, 4], [-carW, carL, 4],
+                // Cabin top
+                [-carW * 0.75, -carL * 0.45, carH], [carW * 0.75, -carL * 0.45, carH],
+                [carW * 0.75, carL * 0.4, carH], [-carW * 0.75, carL * 0.4, carH]
+            ];
+
+            const projectedCorners = carCorners.map(c => project3D(c[0], c[1], c[2]));
+
+            // Draw Bottom Box
+            if (projectedCorners[0] && projectedCorners[1] && projectedCorners[2] && projectedCorners[3]) {
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba(6, 182, 212, 0.1)';
+                ctx.strokeStyle = '#06b6d4';
+                ctx.lineWidth = 1.5;
+                ctx.moveTo(projectedCorners[0].x, projectedCorners[0].y);
+                ctx.lineTo(projectedCorners[1].x, projectedCorners[1].y);
+                ctx.lineTo(projectedCorners[2].x, projectedCorners[2].y);
+                ctx.lineTo(projectedCorners[3].x, projectedCorners[3].y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
+
+            // Draw Cabin Lines
+            if (projectedCorners[4] && projectedCorners[5] && projectedCorners[6] && projectedCorners[7]) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#38bdf8';
+                ctx.fillStyle = 'rgba(56, 189, 248, 0.18)';
+                ctx.moveTo(projectedCorners[4].x, projectedCorners[4].y);
+                ctx.lineTo(projectedCorners[5].x, projectedCorners[5].y);
+                ctx.lineTo(projectedCorners[6].x, projectedCorners[6].y);
+                ctx.lineTo(projectedCorners[7].x, projectedCorners[7].y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Pillars
+                [0, 1, 2, 3].forEach(i => {
+                    if (projectedCorners[i] && projectedCorners[i + 4]) {
+                        ctx.beginPath();
+                        ctx.moveTo(projectedCorners[i].x, projectedCorners[i].y);
+                        ctx.lineTo(projectedCorners[i + 4].x, projectedCorners[i + 4].y);
+                        ctx.stroke();
+                    }
+                });
+            }
+
+            // LiDAR Emitter Dome at Center Top
+            const domeProj = project3D(0, 0, carH + 6);
+            if (domeProj) {
+                ctx.beginPath();
+                ctx.arc(domeProj.x, domeProj.y, 6 * domeProj.scale, 0, Math.PI * 2);
+                ctx.fillStyle = '#06b6d4';
+                ctx.shadowColor = '#06b6d4';
+                ctx.shadowBlur = 12;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            // 4. Draw Active Sweep Laser Line
+            const beamDist = 200;
+            const beamAngleRad = (activeAngle - 90) * (Math.PI / 180);
+            const beamEndX = Math.cos(beamAngleRad) * beamDist;
+            const beamEndY = Math.sin(beamAngleRad) * beamDist;
+            const beamStart = project3D(0, 0, carH + 6);
+            const beamEnd = project3D(beamEndX, beamEndY, 0);
+
+            if (beamStart && beamEnd) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(6, 182, 212, 0.85)';
+                ctx.lineWidth = 2;
+                ctx.moveTo(beamStart.x, beamStart.y);
+                ctx.lineTo(beamEnd.x, beamEnd.y);
+                ctx.stroke();
+            }
+
+            // 5. Draw 3D Point Cloud Mesh & Obstacle Points
+            // Sort points by depth for correct 3D occlusion
+            const projectedPoints = points
+                .map(pt => {
+                    const rad = (pt.angle - 90) * (Math.PI / 180);
+                    const wx = Math.cos(rad) * pt.distance;
+                    const wy = Math.sin(rad) * pt.distance;
+                    const wz = pt.z || 8; // Slight elevation
+                    const proj = project3D(wx, wy, wz);
+                    const groundProj = project3D(wx, wy, 0);
+                    return {
+                        ...pt,
+                        proj,
+                        groundProj,
+                        depth: proj ? proj.depth : 9999
+                    };
+                })
+                .filter(pt => pt.proj !== null)
+                .sort((a, b) => b.depth - a.depth);
+
+            // Connect adjacent points to draw continuous 3D Obstacle Boundary Envelope
+            if (projectedPoints.length > 2) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(6, 182, 212, 0.45)';
+                ctx.fillStyle = 'rgba(6, 182, 212, 0.08)';
+                ctx.lineWidth = 1.5;
+                projectedPoints.forEach((pt, i) => {
+                    if (i === 0) ctx.moveTo(pt.proj.x, pt.proj.y);
+                    else ctx.lineTo(pt.proj.x, pt.proj.y);
+                });
+                ctx.stroke();
+                ctx.fill();
+            }
+
+            // Render Point Cloud Voxels / Spheres
+            projectedPoints.forEach(pt => {
+                const color = pt.distance < 50 ? '#ef4444' : pt.distance < 110 ? '#f59e0b' : '#10b981';
+
+                // Vertical height drop line down to ground
+                if (pt.groundProj) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = `${color}44`;
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([2, 3]);
+                    ctx.moveTo(pt.groundProj.x, pt.groundProj.y);
+                    ctx.lineTo(pt.proj.x, pt.proj.y);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // Glowing Point Sphere
+                ctx.beginPath();
+                const radius = Math.max(3, 5 * pt.proj.scale);
+                ctx.arc(pt.proj.x, pt.proj.y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 10;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            animId = requestAnimationFrame(render);
+        };
+
+        render();
+        return () => cancelAnimationFrame(animId);
+    }, [points, activeAngle, activeDistance, viewMode, autoRotate]);
+
+    return (
+        <canvas 
+            ref={canvasRef} 
+            className="w-full h-full cursor-grab active:cursor-grabbing block"
+        />
+    );
+};
+
 const RadarStation = () => {
-    // 100% Real Hardware State from Raspberry Pi (No Mock / Dummy Data)
     const [radar, setRadar] = useState({ angle: 0, distance: 0 });
     const [piConnected, setPiConnected] = useState(false);
     const [lastPacketTime, setLastPacketTime] = useState(null);
+
+    // 3D Point Cloud Persistence Buffer
+    const [pointCloud, setPointCloud] = useState([]);
+    const [viewMode, setViewMode] = useState('3d'); // '3d', 'top', 'fpv'
+    const [autoRotate, setAutoRotate] = useState(true);
 
     // Live Hardware Telemetry Poller
     useEffect(() => {
@@ -162,6 +489,20 @@ const RadarStation = () => {
                     if (rad.distance > 0 || rad.angle > 0) {
                         setPiConnected(true);
                         setLastPacketTime(new Date().toLocaleTimeString());
+
+                        // Add valid point to 3D Point Cloud Buffer
+                        if (rad.distance > 5 && rad.distance < 240) {
+                            setPointCloud(prev => {
+                                // Keep only the latest 140 points across the 360/180 degree sweeps
+                                const filtered = prev.filter(p => Math.abs(p.angle - rad.angle) > 2);
+                                return [...filtered, {
+                                    angle: rad.angle,
+                                    distance: rad.distance,
+                                    z: 10 + Math.sin(rad.angle * 0.05) * 8, // Realistic ground contour height
+                                    timestamp: Date.now()
+                                }].slice(-160);
+                            });
+                        }
                     }
                 }
             } catch (err) {
@@ -170,26 +511,18 @@ const RadarStation = () => {
         };
 
         fetchRadarTelemetry();
-        const interval = setInterval(fetchRadarTelemetry, 800);
+        const interval = setInterval(fetchRadarTelemetry, 500);
         return () => clearInterval(interval);
     }, []);
 
     const activeAngle = radar.angle || 0;
     const activeDistance = radar.distance || 0;
 
-    // Polar-to-Cartesian obstacle projection around the vehicle
-    const clampedDist = Math.max(20, Math.min(240, activeDistance));
-    const pixelRadius = 50 + (clampedDist / 240) * 160;
-    
-    // Offset by -90 deg so 0 deg is front
-    const rad = (activeAngle - 90) * (Math.PI / 180);
-    const obstacleX = Math.cos(rad) * pixelRadius;
-    const obstacleY = Math.sin(rad) * pixelRadius;
+    const isCritical = activeDistance > 0 && activeDistance < 50;
+    const isWarning = activeDistance >= 50 && activeDistance < 110;
 
-    // Real Hardware Threat proximity level
-    const isCritical = activeDistance > 0 && activeDistance < 60;
-    const isWarning = activeDistance >= 60 && activeDistance < 130;
-    const hasObstacle = activeDistance > 0 && activeDistance < 240;
+    // Nearest obstacle in the point cloud
+    const nearestObstacle = pointCloud.reduce((min, p) => p.distance < min ? p.distance : min, activeDistance || 999);
 
     return (
         <div className="w-full relative min-h-screen scanlines selection:bg-cyan-500 selection:text-white">
@@ -212,14 +545,14 @@ const RadarStation = () => {
                         <div>
                             <div className="flex items-center gap-2">
                                 <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-                                    360° LiDAR Radar Station
+                                    3D LiDAR Spatial Mapping Station
                                 </h1>
                                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                                    HARDWARE LINK
+                                    POINT CLOUD 3D
                                 </span>
                             </div>
                             <p className="text-xs text-gray-400 font-mono mt-0.5">
-                                Physical 360° Servo LiDAR Point-Cloud Stream & Collision Guard
+                                Real-Time 3D Volumetric Obstacle Point-Cloud & Spatial Radar Sweep
                             </p>
                         </div>
                     </div>
@@ -232,42 +565,19 @@ const RadarStation = () => {
                                 : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
                         }`}>
                             <span className={`w-2 h-2 rounded-full ${piConnected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
-                            <span>{piConnected ? '🟢 RASPBERRY PI STREAM LIVE' : '🟡 AWAITING PI STREAM ON PORT 5000'}</span>
+                            <span>{piConnected ? '🟢 RASPBERRY PI HARDWARE LINK ACTIVE' : '🟡 AWAITING PI TELEMETRY'}</span>
                         </div>
                     </div>
                 </div>
 
-                {/* 2. MASTER FULL-SCREEN 3D CAR LIDAR STATION HERO */}
-                <div className="relative w-full h-[480px] sm:h-[580px] rounded-[36px] glass-card border border-cyan-500/40 p-6 sm:p-10 flex flex-col items-center justify-center overflow-hidden shadow-2xl shadow-cyan-950/60">
+                {/* 2. MASTER 3D PERSPECTIVE POINT CLOUD HERO */}
+                <div className="relative w-full h-[520px] sm:h-[620px] rounded-[36px] glass-card border border-cyan-500/40 p-2 sm:p-4 flex flex-col items-center justify-center overflow-hidden shadow-2xl shadow-cyan-950/60">
                     
-                    {/* Background Light Beam Sweep */}
-                    <div className="absolute inset-0 w-1/2 h-full bg-white/5 transform -skew-x-12 animate-beam pointer-events-none" />
-
-                    {/* Concentric LiDAR Range Distance Rings */}
-                    <div className="absolute w-[140px] h-[140px] rounded-full border border-cyan-500/15 pointer-events-none flex items-center justify-center">
-                        <span className="absolute top-1 text-[8px] font-mono text-cyan-400/50">50 cm</span>
-                    </div>
-                    <div className="absolute w-[240px] h-[240px] rounded-full border border-cyan-500/20 pointer-events-none flex items-center justify-center">
-                        <span className="absolute top-1 text-[8px] font-mono text-cyan-400/50">100 cm</span>
-                    </div>
-                    <div className="absolute w-[360px] h-[360px] rounded-full border border-dashed border-cyan-400/25 animate-hud-spin pointer-events-none flex items-center justify-center">
-                        <span className="absolute top-1 text-[9px] font-mono text-cyan-400/50">150 cm</span>
-                    </div>
-                    <div className="absolute w-[480px] h-[480px] rounded-full border border-blue-500/20 animate-hud-spin-reverse pointer-events-none flex items-center justify-center">
-                        <span className="absolute top-1 text-[9px] font-mono text-blue-400/50">200 cm</span>
-                    </div>
-
-                    {/* Continuous Conic 360° LiDAR Radar Sweep Beam */}
-                    <div 
-                        className="absolute w-[480px] h-[480px] rounded-full animate-radar pointer-events-none"
-                        style={{
-                            background: 'conic-gradient(from 0deg, rgba(6,182,212,0.45) 0deg, rgba(6,182,212,0.08) 45deg, transparent 90deg)'
-                        }}
-                    />
-
-                    {/* Threat Status Pill in Center Top */}
-                    <div className="absolute top-6 left-8 flex items-center gap-3">
-                        <div className={`px-4 py-1.5 rounded-full text-xs font-mono font-black border flex items-center gap-2 shadow-xl ${
+                    {/* View Controls & HUD Bar */}
+                    <div className="absolute top-5 left-5 right-5 z-20 flex flex-wrap items-center justify-between gap-3 pointer-events-auto">
+                        
+                        {/* Threat Level Banner */}
+                        <div className={`px-4 py-1.5 rounded-full text-xs font-mono font-black border flex items-center gap-2 shadow-xl backdrop-blur-md ${
                             isCritical 
                                 ? 'bg-red-600/30 border-red-500 text-red-300 animate-bounce' 
                                 : isWarning 
@@ -275,114 +585,106 @@ const RadarStation = () => {
                                     : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
                         }`}>
                             <AlertTriangle size={14} className={isCritical ? 'text-red-400 animate-spin' : ''} />
-                            <span>{isCritical ? '🛑 CRITICAL COLLISION PROXIMITY' : isWarning ? '⚠️ CAUTION: OBJECT NEARBY' : 'RADAR CLEAR — PATH SAFE'}</span>
+                            <span>
+                                {isCritical 
+                                    ? `🛑 CRITICAL COLLISION PROXIMITY (${activeDistance} cm)` 
+                                    : isWarning 
+                                        ? `⚠️ CAUTION: OBSTACLE AT ${activeDistance} cm` 
+                                        : 'RADAR CLEAR — PATH SAFE'}
+                            </span>
                         </div>
-                    </div>
 
-                    <div className="absolute top-6 right-8 hidden sm:flex items-center gap-4 text-xs font-mono text-gray-400 bg-black/40 px-4 py-2 rounded-2xl border border-white/5">
-                        <span>LIDAR ANGLE: <b className="text-cyan-300">{activeAngle}°</b></span>
-                        <span>DISTANCE: <b className={isCritical ? 'text-red-400' : 'text-emerald-400'}>{activeDistance ? `${activeDistance} cm` : 'Path Clear'}</b></span>
-                    </div>
-
-                    {/* 3D CAR CHASSIS MODEL & LASER TARGET SYSTEM */}
-                    <div className="relative z-10 flex flex-col items-center justify-center scale-95 sm:scale-110 transition-transform">
-                        
-                        {/* Dynamic Laser Line to Real Obstacle */}
-                        {hasObstacle && (
-                            <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible z-20">
-                                <line
-                                    x1="0"
-                                    y1="0"
-                                    x2={obstacleX}
-                                    y2={obstacleY}
-                                    stroke={isCritical ? '#ef4444' : isWarning ? '#f59e0b' : '#06b6d4'}
-                                    strokeWidth="3"
-                                    strokeDasharray="5 5"
-                                    className="animate-pulse"
-                                />
-                            </svg>
-                        )}
-
-                        {/* Real Detected 3D Obstacle Target Object */}
-                        {hasObstacle && (
-                            <div 
-                                className="absolute z-30 transition-all duration-300 pointer-events-none flex flex-col items-center"
-                                style={{
-                                    transform: `translate(${obstacleX}px, ${obstacleY}px)`
-                                }}
+                        {/* Interactive View Mode Buttons */}
+                        <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shadow-xl">
+                            <button
+                                onClick={() => setViewMode('3d')}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1.5 ${
+                                    viewMode === '3d' 
+                                        ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/40' 
+                                        : 'text-gray-300 hover:text-white hover:bg-white/10'
+                                }`}
                             >
-                                <div className={`relative p-2.5 rounded-2xl border flex items-center justify-center shadow-2xl ${
-                                    isCritical 
-                                        ? 'bg-red-600/90 border-red-300 text-white shadow-red-600/70 animate-bounce' 
-                                        : isWarning 
-                                            ? 'bg-amber-500/90 border-amber-200 text-black shadow-amber-500/60 animate-pulse' 
-                                            : 'bg-cyan-500/80 border-cyan-200 text-white shadow-cyan-500/60'
-                                }`}>
-                                    <Target size={20} className="animate-spin" style={{ animationDuration: '4s' }} />
-                                </div>
-                                
-                                <div className="mt-1 px-2.5 py-1 rounded-xl bg-black/90 border border-white/20 text-[10px] font-mono font-black text-white whitespace-nowrap shadow-2xl">
-                                    ⚠️ {activeDistance} cm ({activeAngle}°)
-                                </div>
-                            </div>
-                        )}
+                                <Compass size={13} />
+                                <span>3D Orbit</span>
+                            </button>
 
-                        {/* Headlights Light Beams */}
-                        <div className="absolute -top-20 flex justify-between w-28">
-                            <div className="w-12 h-24 bg-gradient-to-t from-cyan-400/60 via-cyan-400/15 to-transparent blur-md transform -rotate-12 rounded-t-full"></div>
-                            <div className="w-12 h-24 bg-gradient-to-t from-cyan-400/60 via-cyan-400/15 to-transparent blur-md transform rotate-12 rounded-t-full"></div>
-                        </div>
+                            <button
+                                onClick={() => setViewMode('fpv')}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1.5 ${
+                                    viewMode === 'fpv' 
+                                        ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/40' 
+                                        : 'text-gray-300 hover:text-white hover:bg-white/10'
+                                }`}
+                            >
+                                <Eye size={13} />
+                                <span>Cockpit FPV</span>
+                            </button>
 
-                        {/* High-Detail 3D Car Chassis Body */}
-                        <div className="relative w-32 h-52 rounded-[40px] bg-gradient-to-b from-[#0e244d] via-[#091733] to-[#040a18] border-2 border-cyan-400 shadow-[0_0_45px_rgba(6,182,212,0.45)] flex flex-col items-center justify-between p-4">
-                            
-                            {/* Front Aerodynamic Windshield */}
-                            <div className="w-24 h-12 rounded-t-2xl bg-cyan-500/25 border border-cyan-400/50 flex items-center justify-center shadow-inner">
-                                <span className="text-[9px] font-mono text-cyan-200 font-bold tracking-wider">WINDSHIELD</span>
-                            </div>
+                            <button
+                                onClick={() => setViewMode('top')}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1.5 ${
+                                    viewMode === 'top' 
+                                        ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/40' 
+                                        : 'text-gray-300 hover:text-white hover:bg-white/10'
+                                }`}
+                            >
+                                <Layers size={13} />
+                                <span>2D Top-Down</span>
+                            </button>
 
-                            {/* Center Roof 360° LiDAR Dome Emitter */}
-                            <div className="relative w-11 h-11 rounded-full bg-gradient-to-br from-cyan-400 via-blue-600 to-indigo-600 border-2 border-white flex items-center justify-center shadow-[0_0_20px_#06b6d4]">
-                                <Compass size={20} className="text-white animate-spin" style={{ animationDuration: '6s' }} />
-                                <span className="absolute -inset-1 rounded-full border border-cyan-300 animate-ping opacity-80" />
-                            </div>
+                            <div className="w-[1px] h-4 bg-white/20 mx-1" />
 
-                            {/* Rear Windshield */}
-                            <div className="w-24 h-9 rounded-b-2xl bg-indigo-500/25 border border-indigo-400/50 flex items-center justify-center">
-                                <span className="text-[9px] font-mono text-indigo-200 font-bold tracking-wider">REAR</span>
-                            </div>
+                            <button
+                                onClick={() => setAutoRotate(!autoRotate)}
+                                title="Toggle Auto-Rotation"
+                                className={`p-1.5 rounded-xl text-xs font-mono transition-all ${
+                                    autoRotate 
+                                        ? 'bg-white/20 text-cyan-300' 
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                            >
+                                <RotateCw size={13} className={autoRotate ? 'animate-spin' : ''} style={{ animationDuration: '8s' }} />
+                            </button>
 
-                            {/* 4 Cyber Wheels */}
-                            {/* Front Left */}
-                            <div className="absolute -left-4 top-7 w-4 h-12 rounded-full bg-cyan-400 shadow-[0_0_15px_#06b6d4] animate-pulse" />
-                            {/* Front Right */}
-                            <div className="absolute -right-4 top-7 w-4 h-12 rounded-full bg-cyan-400 shadow-[0_0_15px_#06b6d4] animate-pulse" />
-                            {/* Rear Left */}
-                            <div className="absolute -left-4 bottom-7 w-4 h-12 rounded-full bg-blue-500 shadow-[0_0_15px_#3b82f6] animate-pulse" />
-                            {/* Rear Right */}
-                            <div className="absolute -right-4 bottom-7 w-4 h-12 rounded-full bg-blue-500 shadow-[0_0_15px_#3b82f6] animate-pulse" />
-                        </div>
-
-                        {/* Taillights Red Glow */}
-                        <div className="absolute -bottom-7 flex justify-between w-24">
-                            <div className="w-8 h-9 bg-red-500/60 blur-sm rounded-full"></div>
-                            <div className="w-8 h-9 bg-red-500/60 blur-sm rounded-full"></div>
+                            <button
+                                onClick={() => setPointCloud([])}
+                                title="Clear Point Cloud Map"
+                                className="p-1.5 rounded-xl text-xs text-gray-400 hover:text-red-300 hover:bg-red-500/20 transition-all"
+                            >
+                                <Trash2 size={13} />
+                            </button>
                         </div>
                     </div>
 
-                    {/* Bottom Status Bar inside the radar hero */}
-                    <div className="absolute bottom-4 w-full px-8 flex items-center justify-between text-xs font-mono text-gray-400 border-t border-white/10 pt-3">
-                        <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
+                    {/* The Full 3D Interactive Point Cloud Visualizer */}
+                    <div className="w-full h-full relative">
+                        <Lidar3DPointCloudCanvas 
+                            points={pointCloud} 
+                            activeAngle={activeAngle} 
+                            activeDistance={activeDistance} 
+                            viewMode={viewMode}
+                            autoRotate={autoRotate}
+                        />
+
+                        {/* Interactive Orbit Hint */}
+                        <div className="absolute top-16 right-5 pointer-events-none text-[10px] font-mono text-cyan-400/80 bg-black/60 px-3 py-1.5 rounded-xl border border-cyan-500/20 backdrop-blur-md hidden sm:block">
+                            🖱️ Drag to rotate 3D view • Scroll to zoom
+                        </div>
+                    </div>
+
+                    {/* Bottom Status Bar inside 3D Hero */}
+                    <div className="absolute bottom-4 w-full px-8 flex items-center justify-between text-xs font-mono text-gray-400 border-t border-white/10 pt-3 z-20 pointer-events-none">
+                        <span className="flex items-center gap-2 text-cyan-300 font-bold">
                             <Scan size={15} />
-                            <span>LIDAR MATRIX: <b>ACTIVE 360°</b></span>
+                            <span>3D POINT CLOUD: <b>{pointCloud.length} VOXELS MAPPED</b></span>
                         </span>
 
                         <span className="text-gray-300 hidden md:inline">
-                            RADAR RANGE: <b>0.2m - 4.0m</b>
+                            LIDAR SWEEP: <b className="text-cyan-300">{activeAngle}°</b> | PROXIMITY: <b className={isCritical ? 'text-red-400' : 'text-emerald-400'}>{activeDistance ? `${activeDistance} cm` : 'Path Clear'}</b>
                         </span>
 
-                        <span className="text-emerald-400 font-bold">
-                            COLLISION OVERRIDE: READY
+                        <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                            <Shield size={14} /> COLLISION GUARD: ACTIVE
                         </span>
                     </div>
                 </div>
@@ -394,9 +696,11 @@ const RadarStation = () => {
                     <div className="lg:col-span-7 rounded-3xl p-6 sm:p-7 glass-card border border-cyan-500/30 flex flex-col justify-between space-y-4 shadow-2xl">
                         <div className="flex items-center justify-between">
                             <span className="text-xs font-mono text-cyan-300 font-bold uppercase flex items-center gap-2">
-                                <Shield size={16} /> BLIND SPOT & QUADRANT SECTORS
+                                <Shield size={16} /> 360° SPATIAL PROXIMITY SECTORS
                             </span>
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-200">60 FPS</span>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-200">
+                                {pointCloud.length} Active 3D Coordinates
+                            </span>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -431,7 +735,7 @@ const RadarStation = () => {
 
                         <div className="text-[11px] font-mono text-gray-400 flex items-center justify-between border-t border-white/5 pt-3">
                             <span>Ingestion Endpoint: <b className="text-white">POST /api/radar</b></span>
-                            <span className="text-cyan-400">Point-Cloud Ledger Sync</span>
+                            <span className="text-cyan-400">3D Point-Cloud Ledger Synced</span>
                         </div>
                     </div>
 
@@ -440,21 +744,21 @@ const RadarStation = () => {
                         <div>
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-xs font-mono text-cyan-300 font-bold uppercase flex items-center gap-2">
-                                    <RadioTower size={16} /> HARDWARE SPECIFICATIONS
+                                    <RadioTower size={16} /> 3D SENSOR TELEMETRY
                                 </span>
                                 <span className="text-[10px] font-mono text-gray-400">
-                                    {lastPacketTime ? `Last Packet: ${lastPacketTime}` : 'Awaiting Packets'}
+                                    {lastPacketTime ? `Packet: ${lastPacketTime}` : 'Awaiting Packets'}
                                 </span>
                             </div>
                             <p className="text-xs text-gray-400 leading-relaxed font-mono">
-                                Live status of physical sensor link connected to Raspberry Pi:
+                                Live VL53L0X Time-of-Flight laser rangefinder with continuous 3D spatial mapping:
                             </p>
                         </div>
 
                         <div className="space-y-2.5 font-mono text-xs">
                             <div className="p-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between">
-                                <span className="text-gray-400">Sensor Model</span>
-                                <span className="text-white font-bold">360° LiDAR / Ultrasonic Servo</span>
+                                <span className="text-gray-400">LiDAR Sensor</span>
+                                <span className="text-white font-bold">VL53L0X (940nm ToF Laser)</span>
                             </div>
 
                             <div className="p-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between">
@@ -463,21 +767,21 @@ const RadarStation = () => {
                             </div>
 
                             <div className="p-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between">
-                                <span className="text-gray-400">Measured Distance</span>
+                                <span className="text-gray-400">Closest Obstacle</span>
                                 <span className={`font-bold ${isCritical ? 'text-red-400' : 'text-emerald-400'}`}>
-                                    {activeDistance ? `${activeDistance} cm` : '0 cm (Clear)'}
+                                    {nearestObstacle !== 999 ? `${nearestObstacle} cm` : 'Clear'}
                                 </span>
                             </div>
 
                             <div className="p-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between">
-                                <span className="text-gray-400">Collision Avoidance Override</span>
-                                <span className="text-emerald-400 font-bold">ARMED</span>
+                                <span className="text-gray-400">3D Point Cloud Buffer</span>
+                                <span className="text-cyan-300 font-bold">{pointCloud.length} / 160 Points</span>
                             </div>
                         </div>
 
                         <div className="text-[11px] font-mono text-gray-500 flex items-center justify-between border-t border-white/5 pt-3">
-                            <span>Daemon: <b>python radar_system.py</b></span>
-                            <span className="text-cyan-400">Port 5000</span>
+                            <span>Daemon: <b>python unified_sensors.py</b></span>
+                            <span className="text-emerald-400">Online</span>
                         </div>
                     </div>
 

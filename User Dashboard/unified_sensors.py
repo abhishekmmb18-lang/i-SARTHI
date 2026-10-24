@@ -21,7 +21,15 @@ import pynmea2
 # ==========================================
 
 # --- Global Configuration ---
-SERVER_IP = "http://10.197.196.214:5000" # Laptop IP on Wi-Fi Network
+import os
+DEFAULT_HOST = "10.193.29.214"
+if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+    raw = sys.argv[1].replace("http://", "").replace("https://", "").split("/")[0].split(":")[0]
+    if raw:
+        DEFAULT_HOST = raw
+
+SERVER_IP = os.getenv("ISARTHI_SERVER_IP", f"http://{DEFAULT_HOST}:5000")
+print(f"🌐 [INIT] Connecting Unified Sensors to Backend Server: {SERVER_IP}")
 
 ENDPOINTS = {
     "alcohol": f"{SERVER_IP}/api/alcohol",
@@ -44,6 +52,7 @@ SERVO_PIN = 6           # GPIO 6 (Physical Pin 31)
 GPS_PORT = "/dev/ttyAMA5" # UART5
 GSM_PORT = "/dev/serial0" # UART0
 I2C_BUS = 1
+i2c_lock = threading.Lock()
 
 # --- Global Flags ---
 RUNNING = True
@@ -138,43 +147,90 @@ def run_gps_tracker():
 
 # ==========================================
 # 3. RADAR SYSTEM (LiDAR + Servo)
-# ==========================================
-def run_radar_system():
-    print("🦇 [Radar] Starting LiDAR + Servo...")
+# ====================def run_radar_system():
+    print("🦇 [Radar] Starting LiDAR + Servo Monitor...")
     
-    # Setup I2C LiDAR
-    try:
-        i2c = busio.I2C(board.SCL, board.SDA)
-        vl53 = adafruit_vl53l0x.VL53L0X(i2c)
-    except Exception as e:
-        print(f"❌ [Radar] LiDAR Init Failed: {e}")
-        return
+    vl53 = None
+    i2c_bus_obj = None
+
+    def try_init_vl53():
+        nonlocal vl53, i2c_bus_obj
+        with i2c_lock:
+            try:
+                if not i2c_bus_obj:
+                    i2c_bus_obj = busio.I2C(board.SCL, board.SDA)
+                vl53 = adafruit_vl53l0x.VL53L0X(i2c_bus_obj)
+                vl53.measurement_timing_budget = 33000
+                print("✅ [Radar] VL53L0X LiDAR ACTIVE on I2C address 0x29!", flush=True)
+                return True
+            except Exception as e:
+                print(f"⚠️ [Radar] VL53L0X LiDAR init waiting: {e}")
+                print("💡 [LiDAR Wiring Check]: SDA (Pin 3), SCL (Pin 5), VCC (3.3V Pin 1), GND (Pin 6). Run 'i2cdetect -y 1'.", flush=True)
+                vl53 = None
+                return False
+
+    try_init_vl53()
 
     # Setup Servo
     try:
         servo = AngularServo(SERVO_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0025)
+        print(f"✅ [Radar] Servo configured on GPIO {SERVO_PIN}!")
     except Exception as e:
-        print(f"❌ [Radar] Servo Init Failed: {e}")
+        print(f"⚠️ [Radar] Servo Note: {e} (Fixed/simulated angle sweep mode active)")
         servo = None
 
+    last_log_time = 0
+    last_reconnect_time = time.time()
+    net_fail_count = 0
+
     def scan_sweep(start, end, step):
+        nonlocal last_log_time, last_reconnect_time, net_fail_count, vl53
         for angle in range(start, end, step):
             if not RUNNING: break
             
-            if servo: servo.angle = angle
-            time.sleep(0.04) # Settle time
+            if servo:
+                try:
+                    servo.angle = angle
+                except Exception:
+                    pass
+            time.sleep(0.035) # Settle time
             
+            dist_cm = 0
+            if vl53:
+                try:
+                    with i2c_lock:
+                        dist_mm = vl53.range
+                    # VL53L0X hardware returns ~8190 when out-of-range or timeout
+                    if dist_mm and 20 <= dist_mm <= 2200:
+                        dist_cm = int(dist_mm / 10.0)
+                    else:
+                        dist_cm = 0 # 0 indicates path clear (>2.2m)
+                except Exception as read_err:
+                    dist_cm = 0
+            else:
+                # Attempt auto-reconnect every 4 seconds if sensor was not initialized
+                now = time.time()
+                if now - last_reconnect_time >= 4.0:
+                    last_reconnect_time = now
+                    try_init_vl53()
+
             try:
-                dist_mm = vl53.range
-                dist_cm = dist_mm / 10.0
-                session.post(ENDPOINTS["radar"], json={'angle': angle, 'distance': int(dist_cm)}, timeout=0.8)
-            except:
-                pass
+                session.post(ENDPOINTS["radar"], json={'angle': angle, 'distance': dist_cm}, timeout=0.8)
+                net_fail_count = 0
+                now = time.time()
+                if now - last_log_time >= 1.5:
+                    status_lbl = f"{dist_cm} cm" if dist_cm > 0 else "Path Clear (>2m)"
+                    print(f"📡 [LiDAR] Angle: {angle:3d}° | Distance: {status_lbl:<16} | Server: 200 OK", flush=True)
+                    last_log_time = now
+            except Exception as net_err:
+                net_fail_count += 1
+                if net_fail_count == 1 or net_fail_count % 25 == 0:
+                    print(f"❌ [Radar Network] Cannot reach {ENDPOINTS['radar']}: {net_err}")
 
     while RUNNING:
         try:
-            scan_sweep(0, 181, 6)   # 0 to 180
-            scan_sweep(180, -1, -6) # 180 to 0
+            scan_sweep(0, 181, 4)   # 0 to 180 degrees
+            scan_sweep(180, -1, -4) # 180 to 0 degrees
         except Exception as e:
             print(f"❌ [Radar] Loop Error: {e}")
             time.sleep(1)
@@ -190,12 +246,13 @@ def run_vibration_monitor():
     bus = smbus.SMBus(1)
     
     def mpu_init(addr):
-        try:
-            bus.write_byte_data(addr, 0x19, 7)
-            bus.write_byte_data(addr, 0x6B, 1)
-            return True
-        except:
-            return False
+        with i2c_lock:
+            try:
+                bus.write_byte_data(addr, 0x19, 7)
+                bus.write_byte_data(addr, 0x6B, 1)
+                return True
+            except:
+                return False
 
     l_ok = mpu_init(ADDR_L)
     r_ok = mpu_init(ADDR_R)
@@ -205,14 +262,15 @@ def run_vibration_monitor():
         return
 
     def read_accel(addr):
-        try:
-            h = bus.read_byte_data(addr, 0x3B)
-            l = bus.read_byte_data(addr, 0x3C)
-            val = (h << 8) | l
-            if val > 32768: val -= 65536
-            return val
-        except:
-            return 0
+        with i2c_lock:
+            try:
+                h = bus.read_byte_data(addr, 0x3B)
+                l = bus.read_byte_data(addr, 0x3C)
+                val = (h << 8) | l
+                if val > 32768: val -= 65536
+                return val
+            except:
+                return 0
 
     last_L, last_R = 0, 0
     last_print = time.time()

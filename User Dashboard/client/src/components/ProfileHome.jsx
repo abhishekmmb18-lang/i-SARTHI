@@ -176,8 +176,8 @@ const itemVariants = {
 
 // --- Live Location & Satellite Widget Component ---
 const LocationWidget = ({ gps, onRefreshGps }) => {
-    const lat = (gps.latitude !== undefined && gps.latitude !== null && gps.latitude !== 0) ? gps.latitude : 27.030800;
-    const lon = (gps.longitude !== undefined && gps.longitude !== null && gps.longitude !== 0) ? gps.longitude : 75.893700;
+    const lat = (gps.latitude !== undefined && gps.latitude !== null && gps.latitude !== 0) ? gps.latitude : 26.823287;
+    const lon = (gps.longitude !== undefined && gps.longitude !== null && gps.longitude !== 0) ? gps.longitude : 75.866808;
     const speed = gps.speed || 48.5;
     const mapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
     const [syncing, setSyncing] = useState(false);
@@ -216,7 +216,7 @@ const LocationWidget = ({ gps, onRefreshGps }) => {
     };
 
     const handleSetCustomLocation = async () => {
-        const input = prompt("Enter Latitude, Longitude (e.g., 28.6139, 77.2090 or 27.0308, 75.8937):", `${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+        const input = prompt("Enter Latitude, Longitude (e.g., 28.6139, 77.2090 or 26.823287, 75.866808):", `${lat.toFixed(6)}, ${lon.toFixed(6)}`);
         if (!input) return;
         const parts = input.split(',').map(s => parseFloat(s.trim()));
         if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
@@ -390,11 +390,24 @@ const ProfileHome = ({ user, onLogout }) => {
                 const resRad = await fetch(`${BASE_URL}/api/radar`);
                 if (resRad.ok) setRadar(await resRad.json());
 
-                // 5. DMS Drowsiness
-                const resDrow = await fetch(`${BASE_URL}/api/drowsiness`);
-                if (resDrow.ok) {
-                    const d = await resDrow.json();
-                    setDrowsiness(d.current || d);
+                // 5. DMS Drowsiness (Direct Port 5001 + Backend Port 5000)
+                let drowFound = false;
+                try {
+                    const pyRes = await fetch(`http://${window.location.hostname}:5001/status`);
+                    if (pyRes.ok) {
+                        const pyD = await pyRes.json();
+                        setDrowsiness({ isDrowsy: Boolean(pyD.isDrowsy || pyD.simulated), events: pyD.events || 0 });
+                        drowFound = true;
+                    }
+                } catch(e) {}
+                if (!drowFound) {
+                    try {
+                        const resDrow = await fetch(`${BASE_URL}/api/drowsiness`);
+                        if (resDrow.ok) {
+                            const d = await resDrow.json();
+                            setDrowsiness(d.current || d);
+                        }
+                    } catch(e) {}
                 }
 
                 // 6. Active Road Alerts Check

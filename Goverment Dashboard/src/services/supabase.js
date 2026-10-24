@@ -102,8 +102,8 @@ export async function fetchPotholeClusters() {
             return [];
         }
 
-        const baseLat = hazardEvents[0]?.latitude || 27.0308;
-        const baseLng = hazardEvents[0]?.longitude || 75.89371;
+        const baseLat = hazardEvents[0]?.latitude || 26.823287;
+        const baseLng = hazardEvents[0]?.longitude || 75.866808;
 
         return [
             {

@@ -1,4 +1,6 @@
 require('dotenv').config();
+const http = require('http');
+const path = require('path');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -16,7 +18,139 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
+// --- Fish Audio TTS Proxy ---
+app.post('/api/fish/tts', async (req, res) => {
+    try {
+        const apiKey = process.env.FISH_AUDIO_API_KEY || (req.headers['authorization'] || '').replace('Bearer ', '');
+        if (!apiKey) {
+            return res.status(401).json({ error: 'Missing Fish Audio API Key' });
+        }
+        const fishRes = await fetch('https://api.fish.audio/v1/tts', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(req.body)
+        });
+        if (!fishRes.ok) {
+            const errText = await fishRes.text();
+            return res.status(fishRes.status).send(errText);
+        }
+        res.setHeader('Content-Type', 'audio/mpeg');
+        const buffer = await fishRes.arrayBuffer();
+        res.send(Buffer.from(buffer));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Intelligent In-Vehicle AI Copilot Chat API ---
+app.post('/api/chat', async (req, res) => {
+    try {
+        const { message, language = 'English' } = req.body;
+        const userMsg = (message || '').trim().toLowerCase();
+
+        // 1. Check if OpenAI is available and works
+        const openAIKey = process.env.OPENAI_API_KEY;
+        if (openAIKey) {
+            try {
+                const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${openAIKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-4o-mini',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: `You are I-SARTHI, a caring, smart in-vehicle AI passenger companion and safety copilot.
+Current Vehicle Telemetry:
+- Speed: ${locationData.speed.toFixed(1)} km/h
+- Drowsiness Status: ${latestDrowsinessStatus.isDrowsy ? 'DROWSY WARNING' : 'Normal/Alert'} (${latestDrowsinessStatus.events} events)
+- Cabin Alcohol: ${alcoholData.level} (${alcoholData.value}%)
+- Road Surface Vibration: Left: ${vibrationData.left.toFixed(2)}G, Right: ${vibrationData.right.toFixed(2)}G
+Language: ${language}. If Hindi/Hinglish, reply in warm everyday Hindi.
+Keep answers conversational, warm, and concise (2-3 sentences max) for driver safety.`
+                            },
+                            { role: 'user', content: message }
+                        ]
+                    })
+                });
+                if (aiRes.ok) {
+                    const aiData = await aiRes.json();
+                    const reply = aiData.choices?.[0]?.message?.content;
+                    if (reply) return res.json({ reply });
+                }
+            } catch (e) {
+                // Fallback to internal telemetry NLP engine
+            }
+        }
+
+        // 2. Autonomous In-Vehicle Telemetry NLP Engine
+        let reply = "";
+        const isHindi = language.toLowerCase().includes('hi') || /kya|hai|ho|kaise|neend|chalo|batao|gaadi/.test(userMsg);
+
+        if (/speed|fast|kitni speed|pace/.test(userMsg)) {
+            reply = isHindi 
+                ? `Aapki gaadi abhi ${locationData.speed.toFixed(1)} km/h ki speed par chal rahi hai. Road condition stable hai, aram se drive kijiye!`
+                : `You are currently cruising at ${locationData.speed.toFixed(1)} km/h. Road conditions look stable ahead.`;
+        } else if (/neend|sleep|sleepy|tired|thak|fatigue|rest/.test(userMsg)) {
+            reply = isHindi
+                ? `Agar aapko neend ya thakan lag rahi hai, toh turant agle petrol pump ya rest stop par gaadi rokiye. 15 minute ka break aur ek chai aapko refresh kar degi!`
+                : `Driver safety is our highest priority! If you are feeling fatigue or drowsy, please pull over safely at the next rest stop for a quick break.`;
+        } else if (/pothole|gaddha|road|vibration|shock|khadda/.test(userMsg)) {
+            reply = isHindi
+                ? `Road monitor active hai! Left suspension ${vibrationData.left.toFixed(2)}G aur right suspension ${vibrationData.right.toFixed(2)}G shock detect kar rahe hain. Sadak theek hai!`
+                : `Road surface monitor is active! Suspension telemetry reads ${vibrationData.left.toFixed(2)}G shock. Pothole scanning is normal.`;
+        } else if (/alcohol|sharab|drink|drunk/.test(userMsg)) {
+            reply = isHindi
+                ? `Cabin alcohol sensor status: ${alcoholData.level} (${alcoholData.value}%). Bilkul safe cabin environment hai.`
+                : `Cabin alcohol sensor reports ${alcoholData.level} (${alcoholData.value}%). Vehicle environment is clear and safe.`;
+        } else if (/joke|chutkula|bored|hasi/.test(userMsg)) {
+            reply = isHindi
+                ? `Ek driver ne GPS se poocha: 'Mujhe kahan jaana chahiye?' GPS bola: 'Pehle saamne wali red light dekho, phir socho!' 😄 Dhyaan sadak par rakhiye!`
+                : `Why did the car get a flat tire? Because there was a fork in the road! 😄 Keep smiling and stay alert behind the wheel!`;
+        } else if (/hi|hello|hey|namaste|kya haal|wassup/.test(userMsg)) {
+            reply = isHindi
+                ? `Namaste! Main aapka I-SARTHI copilot hoon. Saari systems active hain. Aaj ka safar kaisa chal raha hai?`
+                : `Hey there! I-SARTHI copilot online and monitoring all telemetry. How is your drive going today?`;
+        } else if (/status|safe|report|all good|sab theek/.test(userMsg)) {
+            reply = isHindi
+                ? `Sabhi safety systems bilkul theek hain: Speed ${locationData.speed.toFixed(1)} km/h, Drowsiness monitor online, radar active hai!`
+                : `All vehicle systems operational: Speed ${locationData.speed.toFixed(1)} km/h, DMS eye-tracker active, radar proximity scanning.`;
+        } else {
+            const dynamicResponses = isHindi ? [
+                `Main bilkul sun raha hoon! Safar ke dauran koi bhi zaroorat ho ya thakan lage toh mujhe bataiye.`,
+                `Safar lamba hai lekin I-SARTHI aapke saath hai. Road par nazar rakhiye aur aage badhiye!`,
+                `Bilkul sahi! Main background mein sensor aur road damage analyze kar raha hoon. Aap befikr hokar drive karein.`
+            ] : [
+                `I'm right beside you monitoring the telemetry. Let me know if you need any directions, music ideas, or a rest stop recommendation!`,
+                `Roads ahead look clear! Keep a steady grip on the steering and let me know if you feel tired at any point.`,
+                `Understood! All radar and vibration sensors are actively scanning while we talk. Have a smooth journey!`
+            ];
+            reply = dynamicResponses[Math.floor(Math.random() * dynamicResponses.length)];
+        }
+
+        res.json({ reply });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- In-Memory Realtime Cache & Shared State ---
+let lastKnownPiIp = process.env.PI_IP || '';
+let lastPotholeDetection = {
+    detected: false,
+    confidence: 0,
+    class_name: null,
+    bbox: [],
+    timestamp: 0,
+    vehicle_id: 'ISARTHI_A'
+};
+
 let latestDrowsinessStatus = {
     isDrowsy: false,
     events: 0,
@@ -47,8 +181,8 @@ let alcoholData = {
 };
 
 let locationData = {
-    latitude: 27.030800,
-    longitude: 75.893700,
+    latitude: 26.823287,
+    longitude: 75.866808,
     speed: 48.5, // km/h
     timestamp: Date.now()
 };
@@ -158,8 +292,8 @@ async function recordPotholeShock(shockG, lat, lon, speed, vehicleId) {
     }
     lastPotholeShockTime = now;
 
-    const currentLat = lat || locationData.latitude || 27.0308;
-    const currentLon = lon || locationData.longitude || 75.8937;
+    const currentLat = lat || locationData.latitude || 26.823287;
+    const currentLon = lon || locationData.longitude || 75.866808;
     const currentSpeed = speed || locationData.speed || 48.5;
 
     // Find active cluster within 15 meters
@@ -599,6 +733,166 @@ app.post('/api/road-data', async (req, res) => {
     });
 });
 
+// ==========================================
+// 3b. Raspberry Pi Pothole Ingest & Live Stream Proxy
+// ==========================================
+app.post('/api/pothole', async (req, res) => {
+    const {
+        vehicle_id,
+        event,
+        class_name,
+        confidence,
+        severity,
+        bbox,
+        latitude,
+        longitude,
+        timestamp
+    } = req.body;
+
+    const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip || '';
+    const cleanIp = rawIp.replace(/^.*:/, '').trim();
+    if (cleanIp && cleanIp !== '1' && cleanIp !== '127.0.0.1' && cleanIp !== 'localhost') {
+        lastKnownPiIp = cleanIp;
+    }
+
+    const confVal = typeof confidence === 'number' ? confidence : 0.85;
+    const confScore = Math.round(confVal <= 1.0 ? confVal * 100 : confVal);
+    const effectiveLat = (latitude !== undefined && latitude !== null && latitude !== 0) ? latitude : locationData.latitude;
+    const effectiveLon = (longitude !== undefined && longitude !== null && longitude !== 0) ? longitude : locationData.longitude;
+    const effectiveVib = (severity || 2) * 1.6;
+
+    lastPotholeDetection = {
+        detected: true,
+        confidence: confVal,
+        class_name: class_name || 'pothole',
+        severity: severity || 2,
+        bbox: bbox || [],
+        latitude: effectiveLat,
+        longitude: effectiveLon,
+        vehicle_id: vehicle_id || 'ISARTHI_A',
+        timestamp: Date.now()
+    };
+
+    const eventRecord = {
+        type: 'Pothole',
+        confidence: confScore,
+        vibration: effectiveVib,
+        latitude: effectiveLat,
+        longitude: effectiveLon,
+        distance: -1,
+        temperature: 0,
+        humidity: 0,
+        alcohol: 0,
+        network_strength: true,
+        sos_alert: false,
+        gsm_connected: true
+    };
+
+    if (isSupabaseConfigured()) {
+        try {
+            const { error: pErr } = await supabase.from('road_events').insert([eventRecord]);
+            if (pErr) {
+                console.error('❌ Supabase pothole insert error:', pErr.message);
+            } else {
+                console.log('☁️ [SUPABASE SYNC] Pothole hazard event saved to road_events');
+            }
+        } catch (e) {
+            console.error('❌ Supabase pothole exception:', e.message);
+        }
+    }
+
+    const sql = `INSERT INTO road_events (type, confidence, vibration, latitude, longitude, distance, temperature, humidity, alcohol, network_strength, sos_alert, gsm_connected) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    db.run(sql, [
+        eventRecord.type,
+        eventRecord.confidence,
+        eventRecord.vibration,
+        eventRecord.latitude,
+        eventRecord.longitude,
+        -1, 0, 0, 0, 1, 0, 1
+    ], function(err) {
+        if (err) console.error('SQLite pothole insert error:', err);
+    });
+
+    if (typeof recordPotholeShock === 'function') {
+        recordPotholeShock(effectiveVib, effectiveLat, effectiveLon, locationData.speed, vehicle_id || 'ISARTHI_A');
+    }
+
+    console.log(`📡 [PI POTHOLE INGEST] ${class_name || 'Pothole'} logged from ${vehicle_id || 'Pi'} @ ${effectiveLat.toFixed(5)}, ${effectiveLon.toFixed(5)} (Conf: ${confScore}%)`);
+
+    res.status(201).json({
+        success: true,
+        message: 'Pothole hazard recorded and clustered successfully',
+        pi_ip: lastKnownPiIp
+    });
+});
+
+app.get('/api/pothole/status', (req, res) => {
+    const isRecent = (Date.now() - lastPotholeDetection.timestamp) < 5000;
+    res.json({
+        ...lastPotholeDetection,
+        is_active: isRecent,
+        pi_ip: lastKnownPiIp
+    });
+});
+
+let lastKnownPiPort = parseInt(process.env.PI_STREAM_PORT) || 5002;
+
+app.get('/api/pothole/config', (req, res) => {
+    res.json({
+        pi_ip: lastKnownPiIp,
+        stream_port: lastKnownPiPort,
+        stream_url: lastKnownPiIp ? `http://${lastKnownPiIp}:${lastKnownPiPort}/video_feed` : ''
+    });
+});
+
+app.post('/api/pothole/config', (req, res) => {
+    const { pi_ip, stream_port } = req.body;
+    if (pi_ip) lastKnownPiIp = pi_ip.trim();
+    if (stream_port) lastKnownPiPort = parseInt(stream_port) || 5002;
+    console.log(`📡 [PI CONFIG] Registered Pi Stream: http://${lastKnownPiIp}:${lastKnownPiPort}/video_feed`);
+    res.json({ success: true, pi_ip: lastKnownPiIp, stream_port: lastKnownPiPort });
+});
+
+app.get('/api/pothole/script', (req, res) => {
+    const filePath = path.join(__dirname, '..', 'pothole_detector.py');
+    res.download(filePath, 'pothole_detector.py');
+});
+
+app.get('/api/sensors/script', (req, res) => {
+    const filePath = path.join(__dirname, '..', 'unified_sensors.py');
+    res.download(filePath, 'unified_sensors.py');
+});
+
+app.get('/api/radar/script', (req, res) => {
+    const filePath = path.join(__dirname, '..', 'radar_system.py');
+    res.download(filePath, 'radar_system.py');
+});
+
+app.get('/api/pothole/stream', (req, res) => {
+    const targetHost = req.query.host || lastKnownPiIp || 'localhost';
+    const targetPort = req.query.port || lastKnownPiPort || 5002;
+    const targetUrl = `http://${targetHost}:${targetPort}/video_feed`;
+
+    const clientReq = http.get(targetUrl, (clientRes) => {
+        res.writeHead(clientRes.statusCode, clientRes.headers);
+        clientRes.pipe(res);
+    });
+
+    clientReq.on('error', (err) => {
+        if (!res.headersSent) {
+            res.status(502).json({
+                error: 'Cannot connect to Raspberry Pi camera stream',
+                target: targetUrl,
+                message: err.message
+            });
+        }
+    });
+
+    req.on('close', () => {
+        clientReq.destroy();
+    });
+});
+
 app.get('/api/road-data', async (req, res) => {
     if (isSupabaseConfigured()) {
         try {
@@ -640,7 +934,11 @@ app.post('/api/drowsiness', async (req, res) => {
                 is_drowsy: latestDrowsinessStatus.isDrowsy,
                 events_count: latestDrowsinessStatus.events
             }]);
-            if (drowErr) console.error("❌ Supabase drowsiness_logs error:", drowErr.message);
+            if (drowErr) {
+                console.error("❌ Supabase drowsiness_logs error:", drowErr.message);
+            } else {
+                console.log(`☁️ [SUPABASE SYNC] DMS Drowsiness logged (isDrowsy: ${latestDrowsinessStatus.isDrowsy}, events: ${latestDrowsinessStatus.events})`);
+            }
 
             if (isDrowsy) {
                 console.log("⚠️ DROWSINESS ALERT RECEIVED!");
@@ -657,7 +955,7 @@ app.post('/api/drowsiness', async (req, res) => {
         }
     }
 
-    db.run(`INSERT INTO drowsiness_logs (is_drowsy, events_count) VALUES (?, ?)`, [isDrowsy, events], () => {});
+    const nowIso = new Date().toISOString(); db.run(`INSERT INTO drowsiness_logs (is_drowsy, events_count, timestamp) VALUES (?, ?, ?)`, [isDrowsy, events, nowIso], () => {});
 
     if (isDrowsy) {
         db.run(`INSERT INTO road_events (type, confidence, latitude, longitude, created_at) VALUES (?, ?, ?, ?, datetime('now'))`,
@@ -685,10 +983,10 @@ app.post('/api/drowsiness', async (req, res) => {
                 event_timestamps: [...drowsinessWindowEvents],
                 dispatched_at: new Date().toISOString(),
                 location: {
-                    latitude: locationData.latitude || 27.0308,
-                    longitude: locationData.longitude || 75.8937,
+                    latitude: locationData.latitude || 26.823287,
+                    longitude: locationData.longitude || 75.866808,
                     speed: locationData.speed || 0,
-                    maps_link: `https://www.google.com/maps?q=${locationData.latitude || 27.0308},${locationData.longitude || 75.8937}`
+                    maps_link: `https://www.google.com/maps?q=${locationData.latitude || 26.823287},${locationData.longitude || 75.866808}`
                 },
                 telemetry: {
                     vibration: { left: vibrationData.left, right: vibrationData.right },
@@ -828,10 +1126,10 @@ app.post('/api/test-drowsiness-bundle', async (req, res) => {
         event_timestamps: mockTimestamps,
         dispatched_at: new Date().toISOString(),
         location: {
-            latitude: locationData.latitude || 27.0308,
-            longitude: locationData.longitude || 75.8937,
+            latitude: locationData.latitude || 26.823287,
+            longitude: locationData.longitude || 75.866808,
             speed: locationData.speed || 0,
-            maps_link: `https://www.google.com/maps?q=${locationData.latitude || 27.0308},${locationData.longitude || 75.8937}`
+            maps_link: `https://www.google.com/maps?q=${locationData.latitude || 26.823287},${locationData.longitude || 75.866808}`
         },
         telemetry: {
             vibration: { left: vibrationData.left, right: vibrationData.right },
@@ -903,7 +1201,9 @@ app.post('/api/radar', (req, res) => {
                     sensor_type: 'Radar',
                     value_1: radarData.angle,
                     value_2: radarData.distance
-                }]).then(() => {});
+                }]).then(({ error }) => {
+                    if (error) console.error("❌ [SUPABASE] Radar insert error:", error.message);
+                });
             } catch (err) {}
         }
 
@@ -965,7 +1265,10 @@ app.post('/api/vibration', (req, res) => {
                         vibration: maxVib,
                         latitude: lat,
                         longitude: lon
-                    }]).then(() => {});
+                    }]).then(({ error }) => {
+                        if (error) console.error("❌ [SUPABASE] Critical vibration error:", error.message);
+                        else console.log(`🚨 [SUPABASE SYNC] Critical Vibration saved to road_events (${maxVib}G)`);
+                    });
                 } catch (err) {}
             }
 
@@ -987,7 +1290,10 @@ app.post('/api/vibration', (req, res) => {
                         sensor_type: 'Vibration',
                         value_1: lVal,
                         value_2: rVal
-                    }]).then(() => {});
+                    }]).then(({ error }) => {
+                        if (error) console.error("❌ [SUPABASE] Vibration error:", error.message);
+                        else console.log(`☁️ [SUPABASE SYNC] Vibration logged: L=${lVal}G, R=${rVal}G`);
+                    });
                 } catch (err) {}
             }
             db.run(`INSERT INTO sensor_logs (sensor_type, value_1, value_2) VALUES (?, ?, ?)`,
@@ -1044,8 +1350,8 @@ app.get('/api/pothole-clusters', async (req, res) => {
 
 // ⚡ 1-Click 10-Vehicle / 10-Pass Pothole Simulation (Calls OpenAI Live)
 app.post('/api/simulate-pothole-cluster', async (req, res) => {
-    const lat = locationData.latitude || 27.0308;
-    const lon = locationData.longitude || 75.8937;
+    const lat = locationData.latitude || 26.823287;
+    const lon = locationData.longitude || 75.866808;
     const clusterId = `POTHOLE_SIM_${Date.now()}`;
 
     const mockLogs = [];
@@ -1168,7 +1474,10 @@ app.post('/api/alcohol', (req, res) => {
                 supabase.from('sensor_logs').insert([{
                     sensor_type: 'Alcohol',
                     value_1: numVal
-                }]).then(() => {});
+                }]).then(({ error }) => {
+                    if (error) console.error("❌ [SUPABASE] Alcohol error:", error.message);
+                    else console.log(`☁️ [SUPABASE SYNC] Alcohol logged: ${numVal}% (${computedLevel})`);
+                });
             } catch (err) {}
         }
         db.run(`INSERT INTO sensor_logs (sensor_type, value_1) VALUES (?, ?)`,
@@ -1336,7 +1645,10 @@ app.post('/api/location', (req, res) => {
                         value_1: locationData.latitude,
                         value_2: locationData.longitude,
                         value_3: locationData.speed
-                    }]).then(() => {});
+                    }]).then(({ error }) => {
+                        if (error) console.error("❌ [SUPABASE] GPS error:", error.message);
+                        else console.log(`☁️ [SUPABASE SYNC] GPS logged: ${locationData.latitude}, ${locationData.longitude} (${locationData.speed} km/h)`);
+                    });
                 } catch (err) {}
             }
             db.run(`INSERT INTO sensor_logs (sensor_type, value_1, value_2, value_3) VALUES (?, ?, ?, ?)`,
@@ -1377,6 +1689,55 @@ app.get('/api/sensor-logs', async (req, res) => {
 });
 
 // ==========================================
+// 10B. Live Supabase Diagnostic & Health API
+// ==========================================
+app.get('/api/supabase-status', async (req, res) => {
+    if (!isSupabaseConfigured()) {
+        return res.json({
+            connected: false,
+            message: "Supabase client is not configured. Check SUPABASE_URL and SUPABASE_KEY in .env"
+        });
+    }
+
+    try {
+        const [
+            { count: sensorLogsCount },
+            { count: roadEventsCount },
+            { count: drowLogsCount },
+            { count: drowBundlesCount },
+            { count: clustersCount }
+        ] = await Promise.all([
+            supabase.from('sensor_logs').select('*', { count: 'exact', head: true }),
+            supabase.from('road_events').select('*', { count: 'exact', head: true }),
+            supabase.from('drowsiness_logs').select('*', { count: 'exact', head: true }),
+            supabase.from('drowsiness_bundles').select('*', { count: 'exact', head: true }),
+            supabase.from('pothole_clusters').select('*', { count: 'exact', head: true })
+        ]);
+
+        const { data: latestLogs } = await supabase
+            .from('sensor_logs')
+            .select('*')
+            .order('id', { ascending: false })
+            .limit(5);
+
+        res.json({
+            connected: true,
+            supabase_url: process.env.SUPABASE_URL,
+            table_counts: {
+                sensor_logs: sensorLogsCount,
+                road_events: roadEventsCount,
+                drowsiness_logs: drowLogsCount,
+                drowsiness_bundles: drowBundlesCount,
+                pothole_clusters: clustersCount
+            },
+            recent_sensor_logs: latestLogs
+        });
+    } catch (err) {
+        res.status(500).json({ connected: false, error: err.message });
+    }
+});
+
+// ==========================================
 // 11. Twilio / SOS Alert API
 // ==========================================
 app.post('/api/sos', async (req, res) => {
@@ -1412,43 +1773,46 @@ app.post('/api/sos', async (req, res) => {
     db.run(sql, ['SOS', 100, 0, lat, lon, 1], () => {});
 
     // Send SMS via Twilio
+    const VERIFIED_FALLBACK_CONTACTS = ['+919651688672', '+917701831707'];
     let contactsToMessage = req.body.contacts || [];
 
-    const sendTwilioMessages = (contactsArray) => {
-        if (!contactsArray || contactsArray.length === 0) {
-            return res.json({ success: true, message: "SOS logged (No SMS recipient)" });
-        }
+    if (!Array.isArray(contactsToMessage)) {
+        contactsToMessage = [contactsToMessage];
+    }
 
-        const promises = contactsArray.map(contact => {
-            let contactNumber = contact.phone || contact;
-            contactNumber = String(contactNumber).trim();
-            if (contactNumber.length === 10 && !contactNumber.startsWith('+')) {
-                contactNumber = '+91' + contactNumber;
+    // Merge any requested numbers with verified numbers to ensure delivery
+    const targetNumbers = new Set(VERIFIED_FALLBACK_CONTACTS);
+    contactsToMessage.forEach(c => {
+        let num = typeof c === 'object' ? (c.phone || c.contact || '') : String(c);
+        num = num.trim();
+        if (num) {
+            if (num.length === 10 && !num.startsWith('+')) {
+                num = '+91' + num;
             }
+            targetNumbers.add(num);
+        }
+    });
 
-            return twilioClient.messages.create({
-                body: smsMsg,
-                to: contactNumber,
-                from: process.env.TWILIO_PHONE_NUMBER
-            }).then(msgObj => {
-                console.log(`🚨 SOS Alert sent via Twilio to ${contactNumber}. SID: ${msgObj.sid}`);
-                return { success: true, sid: msgObj.sid };
-            }).catch(err => {
-                console.warn(`Twilio SMS notice (${contactNumber}):`, err.message);
-                return { success: false, error: err.message };
-            });
-        });
-
-        Promise.all(promises).then(results => {
-            res.json({ success: true, message: "SOS processed" });
-        });
+    const sendTwilioMessages = async (numbersSet) => {
+        const results = [];
+        for (const contactNumber of numbersSet) {
+            try {
+                const msgObj = await twilioClient.messages.create({
+                    body: smsMsg,
+                    to: contactNumber,
+                    from: process.env.TWILIO_PHONE_NUMBER
+                });
+                console.log(`🚨 [TWILIO SOS SENT] to ${contactNumber} (SID: ${msgObj.sid}, Status: ${msgObj.status})`);
+                results.push({ number: contactNumber, success: true, sid: msgObj.sid });
+            } catch (err) {
+                console.warn(`⚠️ [TWILIO NOTICE] Failed for ${contactNumber}: ${err.message}`);
+                results.push({ number: contactNumber, success: false, error: err.message });
+            }
+        }
+        res.json({ success: true, message: "SOS SMS broadcast processed", results });
     };
 
-    if (contactsToMessage.length > 0) {
-        sendTwilioMessages(contactsToMessage);
-    } else {
-        sendTwilioMessages(['+919345841121']);
-    }
+    sendTwilioMessages(targetNumbers);
 });
 
 // ==========================================

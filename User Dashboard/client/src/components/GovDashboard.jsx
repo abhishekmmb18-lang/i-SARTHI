@@ -517,10 +517,10 @@ const GovDashboard = ({ onBack }) => {
                                                 <div className="flex items-center justify-between text-[11px] text-gray-300">
                                                     <span className="flex items-center gap-1">
                                                         <Map size={13} className="text-emerald-400" />
-                                                        {cluster.center_lat ? `${Number(cluster.center_lat).toFixed(5)}°N, ${Number(cluster.center_lng).toFixed(5)}°E` : '27.0308, 75.8937'}
+                                                        {cluster.center_lat ? `${Number(cluster.center_lat).toFixed(5)}°N, ${Number(cluster.center_lng).toFixed(5)}°E` : '26.82329, 75.86681'}
                                                     </span>
                                                     <a 
-                                                        href={`https://www.google.com/maps?q=${cluster.center_lat || 27.0308},${cluster.center_lng || 75.8937}`}
+                                                        href={`https://www.google.com/maps?q=${cluster.center_lat || 26.823287},${cluster.center_lng || 75.866808}`}
                                                         target="_blank"
                                                         rel="noreferrer"
                                                         className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-bold"
@@ -605,7 +605,7 @@ const GovDashboard = ({ onBack }) => {
                                                         {payload.alert_title || 'Driver Fatigue Incident Record'}
                                                     </span>
                                                     <div className="text-[11px] text-gray-400 flex items-center gap-3">
-                                                        <span>📍 GPS: {payload.location?.latitude?.toFixed(4) || '27.0308'}°N, {payload.location?.longitude?.toFixed(4) || '75.8937'}°E</span>
+                                                        <span>📍 GPS: {payload.location?.latitude?.toFixed(4) || '26.8233'}°N, {payload.location?.longitude?.toFixed(4) || '75.8668'}°E</span>
                                                         <span>Events: <b className="text-white">{bundle.events_count || 5}</b></span>
                                                     </div>
                                                 </div>
@@ -662,7 +662,7 @@ const GovDashboard = ({ onBack }) => {
                                                         {payload.alert_title || 'Critical Fatigue Bundle (5 Triggers / 2 Min)'}
                                                     </span>
                                                     <div className="text-[11px] text-gray-400 flex items-center gap-3">
-                                                        <span>📍 GPS: {payload.location?.latitude?.toFixed(4) || '27.0308'}°N, {payload.location?.longitude?.toFixed(4) || '75.8937'}°E</span>
+                                                        <span>📍 GPS: {payload.location?.latitude?.toFixed(4) || '26.8233'}°N, {payload.location?.longitude?.toFixed(4) || '75.8668'}°E</span>
                                                         <span>⚡ Events: <b className="text-white">{bundle.events_count || 5}</b></span>
                                                     </div>
                                                 </div>
@@ -771,7 +771,7 @@ const GovDashboard = ({ onBack }) => {
                                                 <td className="py-3 px-4 text-amber-300 font-bold">#{inc.id || (i + 1)}</td>
                                                 <td className="py-3 px-4 text-white font-bold">{inc.type || 'Road Anomaly'}</td>
                                                 <td className="py-3 px-4 text-rose-400 font-bold">{inc.vibration ? `${inc.vibration}G` : `${inc.confidence || 95}%`}</td>
-                                                <td className="py-3 px-4 text-cyan-300">{inc.latitude ? `${Number(inc.latitude).toFixed(4)}, ${Number(inc.longitude).toFixed(4)}` : '27.0308, 75.8937'}</td>
+                                                <td className="py-3 px-4 text-cyan-300">{inc.latitude ? `${Number(inc.latitude).toFixed(4)}, ${Number(inc.longitude).toFixed(4)}` : '26.8233, 75.8668'}</td>
                                                 <td className="py-3 px-4 text-right text-gray-400">{formatTime(inc.created_at)}</td>
                                             </tr>
                                         ))}

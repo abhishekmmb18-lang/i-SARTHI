@@ -12,9 +12,8 @@ MODULES = [
     {"name": "Alcohol Monitor (MQ-3)", "cmd": ["python3", "alcohol_monitor.py"]},
     {"name": "GSM Service (A7670C)", "cmd": ["python3", "gsm_service.py"]},
     
-    # 2. Camera Analytics (DISABLED: Run on PC)
-    # {"name": "Drowsiness Detector (Cam 0)", "cmd": ["python3", "drowsiness_detector.py"]}, 
-    # {"name": "Pothole Detector (Cam 1)", "cmd": ["python3", "pothole_detector.py"]}
+    # 2. Vision Analytics
+    {"name": "Pothole Detector (Road Vision)", "cmd": ["python3", "pothole_detector.py"]}
 ]
 
 processes = []

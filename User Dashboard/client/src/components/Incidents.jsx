@@ -184,16 +184,25 @@ const Incidents = () => {
         return () => clearInterval(interval);
     }, []);
 
-    // Robust Date & Relative Time Parser
+    // Robust Date & Relative Time Parser with UTC/Local Normalization
+    const parseIncidentDate = (ts) => {
+        if (!ts) return new Date();
+        if (ts instanceof Date) return ts;
+        if (typeof ts === 'number') return new Date(ts);
+        let s = String(ts).trim();
+        if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/.test(s)) {
+            s = s.replace(' ', 'T') + 'Z';
+        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) {
+            s = s + 'Z';
+        }
+        const d = new Date(s);
+        return isNaN(d.getTime()) ? new Date() : d;
+    };
+
     const formatIncidentTime = (ts) => {
         if (!ts) return 'Just now';
         try {
-            let date = new Date(ts);
-            if (isNaN(date.getTime())) {
-                const iso = String(ts).replace(' ', 'T');
-                date = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
-            }
-            if (isNaN(date.getTime())) return String(ts);
+            const date = parseIncidentDate(ts);
             return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' • ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         } catch {
             return 'Just now';
@@ -203,12 +212,7 @@ const Incidents = () => {
     const getRelativeTime = (ts) => {
         if (!ts) return 'Just now';
         try {
-            let date = new Date(ts);
-            if (isNaN(date.getTime())) {
-                const iso = String(ts).replace(' ', 'T');
-                date = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
-            }
-            if (isNaN(date.getTime())) return 'Recently';
+            const date = parseIncidentDate(ts);
             const diffMins = Math.floor((Date.now() - date.getTime()) / 60000);
             if (diffMins <= 0) return 'Just now (<1m ago)';
             if (diffMins === 1) return '1 min ago';

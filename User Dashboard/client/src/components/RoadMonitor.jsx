@@ -31,7 +31,11 @@ import {
     Cpu,
     Compass,
     Crosshair,
-    Maximize2
+    Maximize2,
+    Settings,
+    Wifi,
+    RefreshCw,
+    Sliders
 } from 'lucide-react';
 
 const containerVariants = {
@@ -226,6 +230,78 @@ const RoadMonitor = () => {
     const [peakLeft, setPeakLeft] = useState(0);
     const [peakRight, setPeakRight] = useState(0);
 
+    // Raspberry Pi Camera Stream & HUD State
+    const [piIp, setPiIp] = useState(() => localStorage.getItem('isarthi_pi_ip') || '');
+    const [streamPort, setStreamPort] = useState(() => localStorage.getItem('isarthi_pi_port') || '5001');
+    const [useProxy, setUseProxy] = useState(() => localStorage.getItem('isarthi_pi_proxy') === 'true');
+    const [showSettings, setShowSettings] = useState(false);
+    const [streamKey, setStreamKey] = useState(Date.now());
+    const [piDetection, setPiDetection] = useState({ detected: false, confidence: 0, class_name: null, is_active: false });
+    const [streamFailed, setStreamFailed] = useState(false);
+
+    // Auto-detect Pi IP or read server config
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const res = await fetch(`http://${window.location.hostname}:5000/api/pothole/config`);
+                if (res.ok) {
+                    const cfg = await res.json();
+                    if (cfg.pi_ip && !localStorage.getItem('isarthi_pi_ip')) {
+                        setPiIp(cfg.pi_ip);
+                    }
+                    if (cfg.stream_port && !localStorage.getItem('isarthi_pi_port')) {
+                        setStreamPort(String(cfg.stream_port));
+                    }
+                }
+            } catch (e) {}
+        };
+        fetchConfig();
+    }, []);
+
+    // Live Pothole Status Poller
+    useEffect(() => {
+        const pollStatus = async () => {
+            try {
+                const res = await fetch(`http://${window.location.hostname}:5000/api/pothole/status`);
+                if (res.ok) {
+                    const st = await res.json();
+                    setPiDetection(st);
+                    if (st.pi_ip && !piIp) {
+                        setPiIp(st.pi_ip);
+                    }
+                }
+            } catch (e) {}
+        };
+        pollStatus();
+        const interval = setInterval(pollStatus, 1200);
+        return () => clearInterval(interval);
+    }, [piIp]);
+
+    const activeStreamUrl = useProxy
+        ? `http://${window.location.hostname}:5000/api/pothole/stream?host=${piIp || 'localhost'}&port=${streamPort}`
+        : piIp
+            ? `http://${piIp}:${streamPort}/video_feed`
+            : `http://${window.location.hostname}:${streamPort}/video_feed`;
+
+    const handleSaveStreamSettings = async (newIp, newPort, newProxy) => {
+        setPiIp(newIp);
+        setStreamPort(newPort);
+        setUseProxy(newProxy);
+        localStorage.setItem('isarthi_pi_ip', newIp);
+        localStorage.setItem('isarthi_pi_port', newPort);
+        localStorage.setItem('isarthi_pi_proxy', String(newProxy));
+        setStreamFailed(false);
+        setStreamKey(Date.now());
+
+        try {
+            await fetch(`http://${window.location.hostname}:5000/api/pothole/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pi_ip: newIp, stream_port: newPort })
+            });
+        } catch (e) {}
+    };
+
     // Live Vibration Telemetry Poller
     useEffect(() => {
         const fetchData = async () => {
@@ -305,7 +381,7 @@ const RoadMonitor = () => {
                             lat: item.latitude,
                             lon: item.longitude,
                             location: `${item.latitude ? item.latitude.toFixed(4) : '0.0000'}, ${item.longitude ? item.longitude.toFixed(4) : '0.0000'}`,
-                            time: item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Just Now',
+                            time: item.created_at ? new Date(String(item.created_at).includes(' ') && !String(item.created_at).endsWith('Z') ? String(item.created_at).replace(' ', 'T') + 'Z' : item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Just Now',
                             rawTime: item.created_at,
                             isCritical: item.type && (item.type.includes('Critical') || item.type.includes('SOS') || item.type.includes('Crash')),
                             isPothole: item.type && (item.type.includes('Pothole') || item.type.includes('Bump')),
@@ -359,13 +435,90 @@ const RoadMonitor = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-black text-white tracking-tight">AI Pothole Vision</h3>
-                                    <p className="text-[10px] text-gray-400 font-mono">Neural Surface Profiler</p>
+                                    <p className="text-[10px] text-gray-400 font-mono">Raspberry Pi YOLOv8 Feed</p>
                                 </div>
                             </div>
-                            <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 animate-pulse">
-                                LIVE CAM
-                            </span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowSettings(!showSettings)}
+                                    title="Configure Pi Camera IP / Port"
+                                    className={`p-1.5 rounded-xl border transition-all text-xs flex items-center gap-1 ${
+                                        showSettings 
+                                            ? 'bg-amber-500/30 border-amber-400 text-amber-200' 
+                                            : 'bg-white/10 hover:bg-white/20 border-white/10 text-gray-300'
+                                    }`}
+                                >
+                                    <Settings size={13} className={showSettings ? 'rotate-90 transition-transform' : ''} />
+                                    <span className="text-[10px] font-mono font-bold hidden sm:inline">Pi IP</span>
+                                </button>
+                                <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
+                                    !streamFailed 
+                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 animate-pulse'
+                                        : 'bg-red-500/20 text-red-300 border-red-500/30'
+                                }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${!streamFailed ? 'bg-emerald-400 animate-ping' : 'bg-red-400'}`} />
+                                    <span>{!streamFailed ? 'LIVE CAM' : 'OFFLINE'}</span>
+                                </span>
+                            </div>
                         </div>
+
+                        {/* Interactive IP / Connection Config Drawer */}
+                        {showSettings && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="p-3.5 rounded-2xl bg-black/80 border border-amber-500/30 text-xs font-mono space-y-2.5 shadow-xl"
+                            >
+                                <div className="flex items-center justify-between text-amber-300 font-bold text-[11px]">
+                                    <span className="flex items-center gap-1.5"><Sliders size={12} /> Raspberry Pi Stream Settings</span>
+                                    <span className="text-[9px] text-gray-400 font-normal">Saves to local browser</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="text-[10px] text-gray-400 block mb-0.5">Pi IP Address:</label>
+                                        <input
+                                            type="text"
+                                            value={piIp}
+                                            onChange={(e) => setPiIp(e.target.value)}
+                                            placeholder="e.g. 10.128.23.154"
+                                            className="w-full px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-amber-400"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-gray-400 block mb-0.5">Stream Port:</label>
+                                        <input
+                                            type="text"
+                                            value={streamPort}
+                                            onChange={(e) => setStreamPort(e.target.value)}
+                                            placeholder="5001"
+                                            className="w-full px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-amber-400"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-between pt-1">
+                                    <label className="flex items-center gap-1.5 text-[11px] text-gray-300 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={useProxy}
+                                            onChange={(e) => setUseProxy(e.target.checked)}
+                                            className="rounded border-white/20 text-amber-500 focus:ring-0"
+                                        />
+                                        <span>Use Backend Proxy (Bypasses browser CORS)</span>
+                                    </label>
+                                    <button
+                                        onClick={() => {
+                                            handleSaveStreamSettings(piIp, streamPort, useProxy);
+                                            setShowSettings(false);
+                                        }}
+                                        className="px-3 py-1 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs transition-all shadow-md"
+                                    >
+                                        Save & Connect
+                                    </button>
+                                </div>
+                            </motion.div>
+                        )}
 
                         {/* Stream Box with Laser Corner Brackets */}
                         <div className="relative aspect-video w-full rounded-2xl overflow-hidden border-2 border-amber-500/40 bg-black shadow-2xl flex items-center justify-center group">
@@ -376,43 +529,79 @@ const RoadMonitor = () => {
                             <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-amber-400 z-20 pointer-events-none" />
                             <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-amber-400 z-20 pointer-events-none" />
 
-                            <img
-                                key={Date.now()}
-                                src={`http://${window.location.hostname}:5002/video_feed`}
-                                alt="Pothole Detection Stream"
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    const fallback = e.target.nextElementSibling;
-                                    if (fallback) fallback.style.display = 'flex';
-                                }}
-                            />
+                            {/* Active AI Detection HUD Banner */}
+                            {piDetection?.is_active && piDetection?.detected && (
+                                <div className="absolute top-2.5 left-2.5 right-2.5 z-30 flex items-center justify-between bg-red-600/90 text-white px-3 py-1.5 rounded-xl border border-red-400 shadow-xl backdrop-blur-md animate-pulse">
+                                    <div className="flex items-center gap-2">
+                                        <AlertTriangle size={14} className="text-amber-300 animate-bounce" />
+                                        <span className="text-xs font-mono font-black tracking-wide uppercase">
+                                            POTHOLE DETECTED • {piDetection.class_name || 'ROAD DEFECT'}
+                                        </span>
+                                    </div>
+                                    <span className="text-[11px] font-mono font-bold bg-black/40 px-2 py-0.5 rounded-lg border border-white/20">
+                                        {(piDetection.confidence <= 1 ? (piDetection.confidence * 100).toFixed(0) : piDetection.confidence)}% CONF
+                                    </span>
+                                </div>
+                            )}
 
-                            {/* Stream Loading Fallback */}
-                            <div 
-                                style={{ display: 'none' }}
-                                className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 text-gray-400 font-mono text-xs bg-black/90 z-10 space-y-2"
-                            >
-                                <Crosshair size={32} className="text-amber-400 animate-spin" style={{ animationDuration: '8s' }} />
-                                <span className="font-bold text-white text-sm">Pothole Neural Feed Online</span>
-                                <span className="text-[10px] text-gray-500">Port 5002 • YOLOv8 Road Profiler</span>
-                            </div>
+                            {!streamFailed ? (
+                                <img
+                                    key={streamKey}
+                                    src={activeStreamUrl}
+                                    alt="Raspberry Pi Pothole Stream"
+                                    className="w-full h-full object-cover"
+                                    onError={() => {
+                                        setStreamFailed(true);
+                                    }}
+                                    onLoad={() => {
+                                        setStreamFailed(false);
+                                    }}
+                                />
+                            ) : (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 text-gray-400 font-mono text-xs bg-black/95 z-10 space-y-3">
+                                    <Crosshair size={34} className="text-amber-400 animate-spin" style={{ animationDuration: '10s' }} />
+                                    <div>
+                                        <div className="font-bold text-white text-sm">Pi Camera Waiting for Stream</div>
+                                        <div className="text-[10px] text-amber-300/80 mt-1 max-w-xs break-all">
+                                            Target: {activeStreamUrl}
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setShowSettings(true)}
+                                            className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 text-[10px] font-bold"
+                                        >
+                                            Change Pi IP / Port
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setStreamFailed(false);
+                                                setStreamKey(Date.now());
+                                            }}
+                                            className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 text-[10px] font-bold flex items-center gap-1"
+                                        >
+                                            <RefreshCw size={10} />
+                                            <span>Retry</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Camera HUD Badges */}
-                            <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 bg-red-600/90 px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold text-white shadow-lg z-20">
-                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                                <span>60 FPS • LIVE</span>
+                            <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5 bg-black/80 px-2.5 py-1 rounded-xl text-[9px] font-mono font-bold text-white shadow-lg z-20 border border-white/10">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                                <span>{piIp ? `PI: ${piIp}` : 'LOCAL'} : {streamPort}</span>
                             </div>
 
                             <div className="absolute bottom-2.5 left-2.5 bg-black/80 px-2.5 py-1 rounded-xl text-[10px] font-mono text-amber-300 border border-white/10 flex items-center gap-1.5 shadow-lg z-20">
                                 <Activity size={12} className="text-amber-400 animate-pulse" />
-                                <span>Neural Mesh: 98.4% Acc</span>
+                                <span>YOLOv8 Edge Ingestion</span>
                             </div>
                         </div>
 
                         <div className="text-[11px] font-mono text-gray-400 flex items-center justify-between border-t border-white/10 pt-3">
-                            <span className="text-emerald-400 flex items-center gap-1"><CheckCircle2 size={12} /> Model Active</span>
-                            <span className="text-gray-400">Daemon: <b className="text-white">pothole_detector.py</b></span>
+                            <span className="text-emerald-400 flex items-center gap-1"><CheckCircle2 size={12} /> YOLOv8 Live Feed</span>
+                            <span className="text-gray-400">Stream: <b className="text-white">http://&lt;PI_IP&gt;:{streamPort}/video_feed</b></span>
                         </div>
                     </div>
 

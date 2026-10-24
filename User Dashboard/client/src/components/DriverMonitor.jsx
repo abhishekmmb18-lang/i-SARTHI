@@ -203,29 +203,82 @@ const DriverMonitor = () => {
         }
     };
 
-    // Live Hardware Telemetry Poller
+    // Recent alerts local sliding window (for cluster guard)
+    const [recentAlertTimestamps, setRecentAlertTimestamps] = useState([]);
+
+    // Live Hardware Telemetry Poller (Dual: Direct Port 5001 + Backend Port 5000)
     useEffect(() => {
         const fetchDmsTelemetry = async () => {
+            let dataFound = false;
+
+            // 1. Direct Python DMS Telemetry on Port 5001 (Live Webcam Detector)
+            try {
+                const pyRes = await fetch(`http://${window.location.hostname}:5001/status`);
+                if (pyRes.ok) {
+                    const pyData = await pyRes.json();
+                    const isCurrentlyDrowsy = Boolean(pyData.isDrowsy || pyData.simulated);
+                    const eventCount = pyData.events !== undefined ? pyData.events : 0;
+
+                    setDrowsiness(prev => {
+                        if (eventCount > prev.events) {
+                            setRecentAlertTimestamps(times => {
+                                const now = Date.now();
+                                return [...times, now].filter(t => now - t <= 120000);
+                            });
+                            setDrowsinessLogs(logs => [
+                                {
+                                    id: Date.now(),
+                                    timestamp: new Date().toLocaleTimeString(),
+                                    is_drowsy: 1,
+                                    ear: pyData.ear || 0.18,
+                                    events: eventCount
+                                },
+                                ...logs.slice(0, 9)
+                            ]);
+                        }
+                        return {
+                            ...prev,
+                            isDrowsy: isCurrentlyDrowsy,
+                            events: eventCount,
+                            ear: pyData.ear !== undefined ? pyData.ear : prev.ear,
+                            blink: pyData.blink || 0
+                        };
+                    });
+
+                    if (isCurrentlyDrowsy) {
+                        setLastAlertRawTimestamp(Date.now());
+                        setLastAlertTime(new Date().toLocaleTimeString());
+                    }
+
+                    setPiConnected(true);
+                    dataFound = true;
+                }
+            } catch (pyErr) {}
+
+            // 2. Also check Backend Server on Port 5000 (if running)
             const BASE_URL = `http://${window.location.hostname}:5000`;
             try {
                 const resDrow = await fetch(`${BASE_URL}/api/drowsiness`);
                 if (resDrow.ok) {
                     const d = await resDrow.json();
-                    setDrowsiness(d.current || d);
-                    setWindowEvents(d.window_events_2min || 0);
-                    
-                    if (d.history && Array.isArray(d.history)) {
+                    if (!dataFound) {
+                        setDrowsiness(d.current || d);
+                    }
+                    if (d.window_events_2min !== undefined && d.window_events_2min > 0) {
+                        setWindowEvents(d.window_events_2min);
+                    }
+                    if (d.history && Array.isArray(d.history) && d.history.length > 0) {
                         setDrowsinessLogs(d.history.slice(0, 10));
-                        // Pick the most recent alert timestamp
                         const latestAlert = d.history.find(h => h.is_drowsy === 1 || h.is_drowsy === true || h.is_drowsy === 'true');
                         if (latestAlert && latestAlert.timestamp) {
                             setLastAlertRawTimestamp(latestAlert.timestamp);
                         }
                     }
                     setPiConnected(true);
+                    dataFound = true;
                 }
             } catch (err) {
-                setPiConnected(false);
+                if (!dataFound) setPiConnected(false);
             }
         };
 
@@ -321,13 +374,34 @@ const DriverMonitor = () => {
     // Calculate session duration in minutes
     const sessionMinutes = Math.max(1, Math.round((Date.now() - sessionStartTime) / 60000));
     const eventsPerMinute = ((drowsiness.events || 0) / sessionMinutes).toFixed(2);
+    const activeWindowEvents = windowEvents > 0 ? windowEvents : recentAlertTimestamps.filter(t => Date.now() - t <= 120000).length;
+
+    // Robust Date & Time Parser with UTC/Local Timezone Normalization
+    const parseTs = (ts) => {
+        if (!ts) return new Date();
+        if (ts instanceof Date) return ts;
+        if (typeof ts === 'number') return new Date(ts);
+        let s = String(ts).trim();
+        // If pure time string like "02:18:24 AM"
+        if (/^\d{1,2}:\d{2}(:\d{2})?(\s?[AP]M)?$/i.test(s)) {
+            const today = new Date();
+            return new Date(`${today.toDateString()} ${s}`);
+        }
+        // SQLite UTC format without timezone: "2026-10-24 20:52:19"
+        if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/.test(s)) {
+            s = s.replace(' ', 'T') + 'Z';
+        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) {
+            s = s + 'Z';
+        }
+        const d = new Date(s);
+        return isNaN(d.getTime()) ? new Date() : d;
+    };
 
     // Relative minutes calculation
     const getMinutesAgo = (ts) => {
         if (!ts) return 'Just now';
         try {
-            const date = new Date(ts);
-            if (isNaN(date.getTime())) return ts;
+            const date = parseTs(ts);
             const diffMs = Date.now() - date.getTime();
             const diffMins = Math.floor(diffMs / 60000);
             if (diffMins <= 0) return 'Just now (< 1 min ago)';
@@ -343,8 +417,7 @@ const DriverMonitor = () => {
     const formatLogTime = (ts) => {
         if (!ts) return 'Just now';
         try {
-            const date = new Date(ts);
-            if (isNaN(date.getTime())) return ts;
+            const date = parseTs(ts);
             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         } catch {
             return String(ts);
@@ -382,25 +455,10 @@ const DriverMonitor = () => {
                             </span>
                             
                             <div className="flex items-center gap-2">
-                                <select
-                                    value={selectedCamera}
-                                    onChange={(e) => handleCameraChange(e.target.value)}
-                                    className="bg-black/60 border border-cyan-500/40 rounded-lg px-2.5 py-1 text-xs font-mono text-cyan-200 outline-none hover:border-cyan-400 transition-all cursor-pointer"
-                                    title="Choose active video input device"
-                                >
-                                    {cameraList.length > 0 ? (
-                                        cameraList.map((cam) => (
-                                            <option key={cam.index} value={String(cam.index)} className="bg-gray-900 text-white">
-                                                📷 {cam.name || `Device ${cam.index}`}
-                                            </option>
-                                        ))
-                                    ) : (
-                                        <>
-                                            <option value="0" className="bg-gray-900 text-white">📷 Logi C270 HD WebCam (USB / Dev 0)</option>
-                                            <option value="1" className="bg-gray-900 text-white">💻 Integrated Camera (Dev 1)</option>
-                                        </>
-                                    )}
-                                </select>
+                                <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-black/60 border border-cyan-500/40 text-xs font-mono text-cyan-200 shadow-inner">
+                                    <Camera size={13} className="text-cyan-400" />
+                                    <span>💻 Laptop Built-in Webcam</span>
+                                </div>
                                 
                                 <span className={`px-3.5 py-1 rounded-full text-xs font-mono font-bold border ${
                                     drowsiness.isDrowsy 
@@ -503,9 +561,9 @@ const DriverMonitor = () => {
                         
                         {/* 5X / 2-MIN SLIDING WINDOW CLUSTER DISPATCH CARD */}
                         <div className={`p-6 rounded-3xl glass-card border transition-all duration-300 shadow-2xl space-y-3 ${
-                            windowEvents >= 5 
+                            activeWindowEvents >= 5 
                                 ? 'border-red-500 bg-red-950/40 shadow-red-600/40 animate-pulse' 
-                                : windowEvents >= 3 
+                                : activeWindowEvents >= 3 
                                     ? 'border-orange-500/60 bg-orange-950/20' 
                                     : 'border-cyan-500/40'
                         }`}>
@@ -514,18 +572,18 @@ const DriverMonitor = () => {
                                     <Radio size={16} className="text-cyan-400 animate-pulse" /> 5x / 2-Min Cluster Guard
                                 </span>
                                 <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-black border ${
-                                    windowEvents >= 5 
+                                    activeWindowEvents >= 5 
                                         ? 'bg-red-500 text-white border-red-400' 
                                         : 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
                                 }`}>
-                                    {windowEvents >= 5 ? '🚨 BUNDLE DISPATCHED' : 'ARMED & MONITORING'}
+                                    {activeWindowEvents >= 5 ? '🚨 BUNDLE DISPATCHED' : 'ARMED & MONITORING'}
                                 </span>
                             </div>
 
                             <div className="flex items-baseline justify-between">
                                 <div>
                                     <span className="text-4xl sm:text-5xl font-black font-mono text-white">
-                                        {windowEvents}
+                                        {activeWindowEvents}
                                     </span>
                                     <span className="text-xl font-mono text-gray-400 font-bold"> / 5</span>
                                 </div>
@@ -537,8 +595,8 @@ const DriverMonitor = () => {
                             {/* Progress bar to 5 triggers */}
                             <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden border border-white/10">
                                 <motion.div 
-                                    className={`h-full ${windowEvents >= 5 ? 'bg-red-500' : 'bg-gradient-to-r from-cyan-400 to-amber-400'}`}
-                                    animate={{ width: `${Math.min(100, (windowEvents / 5) * 100)}%` }}
+                                    className={`h-full ${activeWindowEvents >= 5 ? 'bg-red-500' : 'bg-gradient-to-r from-cyan-400 to-amber-400'}`}
+                                    animate={{ width: `${Math.min(100, (activeWindowEvents / 5) * 100)}%` }}
                                     transition={{ duration: 0.3 }}
                                 />
                             </div>

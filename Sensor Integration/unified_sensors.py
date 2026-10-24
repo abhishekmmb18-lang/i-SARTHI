@@ -18,8 +18,10 @@ import pynmea2
 # ==========================================
 
 # --- Global Configuration ---
-SERVER_IP = "http://10.128.23.214:5000" # CHANGE THIS TO YOUR LAPTOP IP
-# SERVER_IP = "http://localhost:5000" # Use this if server is ALSO on the Pi
+import os, sys
+SERVER_IP = os.getenv("ISARTHI_SERVER_IP", "http://10.58.198.112:5000")
+if len(sys.argv) > 1 and sys.argv[1].startswith("http"):
+    SERVER_IP = sys.argv[1].rstrip('/')
 ENDPOINTS = {
     "alcohol": f"{SERVER_IP}/api/alcohol",
     "location": f"{SERVER_IP}/api/location",

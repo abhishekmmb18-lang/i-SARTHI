@@ -5,8 +5,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-# --- Configuration ---
-SERVER_URL = "http://10.197.196.214:5000/api/vibration"
+import os
+SERVER_URL = os.getenv("ISARTHI_VIBRATION_URL", "http://10.58.198.112:5000/api/vibration")
 
 session = requests.Session()
 adapter = HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=Retry(total=2, backoff_factor=0.1))
