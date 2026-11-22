@@ -38,7 +38,7 @@ Vehicle A — Raspberry Pi
         └── Wi-Fi / UDP
                  │
                  ▼
-          Vehicle B — ESP32
+          Vehicle B — Arduino Q
                  │
                  └── LED / Buzzer Alert
 ```
