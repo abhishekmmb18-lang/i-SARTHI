@@ -93,8 +93,8 @@ python drowsiness_detector.py
 ---
 
 ## 👥 Contributors
-*   **Team Lead**: [ABHSIHEK VERMA]
-*   **Developer**: [RITIK GORAI]
+*   **Team Lead**: [RITIK GORAI]
+*   **Developer**: [ABHSIHEK VERMA]
 *   **Hardware Specialist**: [ANVESHA TIWARI]
 
 ---
