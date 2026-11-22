@@ -1,3 +1,23 @@
+# 🚗 iSARTHI (Intelligent Safety & Road Transport Helper Interface)
+
+> **Next-Generation Autonomous AI Road Safety, Driver Fatigue Monitoring (DMS), and Real-Time Cloud Telemetry Platform.**
+
+[![GitHub Repo](https://img.shields.io/badge/GitHub-hypnexis--26-blue?logo=github)](https://github.com/abhishekmmb18-lang/hypnexis-26)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-brightgreen?logo=python)](https://python.org)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green?logo=node.js)](https://nodejs.org)
+[![React](https://img.shields.io/badge/React-18-cyan?logo=react)](https://react.dev)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-emerald?logo=supabase)](https://supabase.com)
+[![YOLO11](https://img.shields.io/badge/YOLO11n-Ultralytics-orange)](https://ultralytics.com)
+
+---
+
+## 👥 Team Hypnexis
+*  **Ritik Gorai** ([@ritikrages](https://github.com/ritikrages))— *Team Lead & AI/Software Architect/Hardware*
+*  **Abhishek Verma** ([@abhishekmmb18-lang](https://github.com/abhishekmmb18-lang))— *Full-Stack Developer*
+* **Anvesha Tiwari** — *Hardware & IoT Embedded Systems Specialist*
+
+---
+
 # iSARTHI 🚗
 ### AI-Powered Intelligent Road & Vehicle Safety System
 
@@ -72,6 +92,31 @@ iSARTHI/
 | Data & Mapping | GPS/GIS, structured JSON events |
 | Dashboard | Existing web dashboard and backend |
 
+### 🧠 Neo4j — Knowledge Graph Intelligence
+
+i-SARTHI explores **Neo4j Graph Database** to represent and analyze relationships between vehicles, road hazards, locations, sensor observations, and infrastructure.
+
+Unlike traditional relational storage, a graph-based approach can help identify connected hazards, repeated reports, nearby risk zones, and relationships between vehicles and road segments.
+
+**Planned Knowledge Graph Structure:**
+
+- **Vehicle** → Reports → **Hazard**
+- **Hazard** → Located_On → **Road Segment**
+- **Vehicle** → Observes → **Sensor Event**
+- **Hazard** → Near → **Other Hazard**
+- **Authority** → Assigned_To → **Maintenance Task**
+
+**Potential Applications:**
+- Detect recurring pothole hotspots.
+- Correlate multiple vehicle reports of the same hazard.
+- Identify high-risk road segments.
+- Support government maintenance prioritization.
+- Build a connected road-safety intelligence network.
+
+**Technology:** Neo4j · Cypher · Graph-Based Relationship Analysis
+
+*Implementation status: Exploratory / planned integration. Graph-based intelligence capabilities will be progressively integrated into the i-SARTHI platform.*
+
 ## 📡 Current Prototype
 
 The current development focuses on:
@@ -114,6 +159,125 @@ iSARTHI is an actively developing prototype. Detection accuracy, hardware reliab
 - **User Dashboard**: Intelligent driver companion and vehicle monitoring portal. Features neural eye-tracking & drowsiness detection (DMS), alcohol sensor monitoring, real-time road hazard & pothole reporting, radar proximity system, and emergency SOS dispatch.
 - **Sensor Integration**: Hardware edge sensing unit and unified telemetry collectors for IMU vibrations, MQ-3 alcohol sensing, GPS tracking, and edge alert triggers.
 
+### 🌟 Core Modules
+1. **AI Road Damage Detection (YOLO11n)**: Real-time road hazard detection for potholes, cracks, debris, open manholes, speed breakers, and barricades with automatic Supabase sync.
+2. **Neural Driver Monitoring System (DMS)**: MediaPipe-powered facial mesh tracking eye aspect ratio (EAR) and blink frequency to prevent microsleep and fatigue crashes.
+3. **Cockpit User Dashboard**: High-tech 60 FPS HUD interface displaying vehicle health, live radar blind-spot scanning, alcohol detection (MQ-3), and SOS emergency broadcasting.
+4. **Government Command Center (Gov Dashboard)**: Centralized municipal analytics mapping verified 10-pass pothole clusters, structural road degradation, and civil repair dispatch orders.
+5. **Hardware IoT Telemetry Suite**: Raspberry Pi / Jetson edge node integrating MPU-6050 dual-axle vibration, Time-of-Flight LiDAR, SIM800L/A7670C 4G GSM, and NEO-7M GPS.
+
+---
+
+## 🏗️ System Architecture
+
+```
+[ Vehicle Camera ] ──> YOLO11n AI (Road Damage) ──┐
+[ Driver Camera  ] ──> MediaPipe DMS (Drowsiness)  ├──> Local Server (Port 5000) ──> Supabase PostgreSQL
+[ Hardware MPU   ] ──> Vibration / Shock Analysis ─┤         │
+[ MQ-3 / Radar   ] ──> Proximity & Alcohol Sensor ─┘         ▼
+                                                    Web Cockpit (Port 5173) & Gov Dashboard
+```
+
+---
+
+## ⚡ Quick Start: Running Commands
+
+### 1. Prerequisites
+Ensure you have the following installed:
+* **Node.js** (v18+) & **npm**
+* **Python** (v3.10+) with `pip`
+* Git
+
+---
+
+### 2. Clone the Repository
+```bash
+git clone https://github.com/abhishekmmb18-lang/hypnexis-26.git
+cd hypnexis-26
+```
+
+---
+
+### 3. Start the Backend Server (Port 5000)
+Handles live sensor packet ingestion, Supabase cloud sync, Twilio SOS dispatch, and SQLite local ledger.
+```bash
+cd "User Dashboard/server"
+npm install
+npm run dev
+```
+> Server runs at: `http://localhost:5000`
+
+---
+
+### 4. Start the User Cockpit Dashboard (Port 5173)
+Launch the interactive driver safety portal with the 3D Holographic HUD.
+```bash
+cd "User Dashboard/client"
+npm install
+npm run dev
+```
+> Open your browser at: **`http://localhost:5173`**
+
+---
+
+### 5. Launch Neural DMS Drowsiness Detector (Port 5001)
+Streams driver webcam feed, computes Eye Aspect Ratio (EAR), and automatically alerts upon 1.5s eye closure.
+```bash
+# In the project root:
+pip install opencv-python mediapipe flask flask-cors requests numpy
+python drowsiness_detector.py
+```
+> Microservice runs at: `http://localhost:5001`
+
+---
+
+### 6. Run AI Road Damage Detection (YOLO11n)
+Monitors road conditions and auto-pushes detected potholes and hazards directly to Supabase cloud.
+
+#### Option A: Live Browser Web Stream
+```bash
+cd models/isarthi_road_damage
+pip install ultralytics opencv-python flask torch
+python web_cam_server.py
+```
+> Open stream at: **`http://localhost:5050`** (includes sensitivity slider & live Supabase sync)
+
+#### Option B: Standalone Native Video Window
+```bash
+cd models/isarthi_road_damage
+python test_model.py --source webcam
+```
+*(Or double-click `run_camera_window.bat` on Windows)*
+
+---
+
+### 7. Run Government Analytics Dashboard
+```bash
+cd "Goverment Dashboard"
+npm install
+npm run dev
+```
+
+---
+
+## 📊 Model Accuracy & Benchmarks
+
+| Metric | Score | Specification |
+| :--- | :--- | :--- |
+| **Model** | **YOLO11n** | 182 layers, 2.6M params, 6.5 GFLOPs |
+| **Precision ($P$)** | **67.24%** | Positive obstacle classification rate |
+| **Recall ($R$)** | **55.60%** | Road damage detection rate |
+| **mAP@50** | **61.22%** | Mean Average Precision at IoU = 0.50 |
+| **Classes** | 6 Classes | `pothole`, `crack`, `debris`, `manhole`, `speed_breaker`, `road_barricade` |
+
+---
+
+## 🗄️ Database & Cloud Integration
+* **Supabase Cloud Database**: Stores timestamped `road_events`, `sensor_logs`, `drowsiness_logs`, and verified `pothole_clusters`.
+* **Local Offline Fallback**: Embedded SQLite (`users.db`) caching telemetry when driving through low-connectivity areas.
+* **Automated SOS Broadcast**: Twilio API dispatches driver coordinates & Google Maps link upon collision or unresponsive driver fatigue.
+
+---
 ## 📜 License
 
 A license has not yet been specified. Usage, modification, and redistribution permissions should be established before the project is shared for broader collaboration.
@@ -121,3 +285,4 @@ A license has not yet been specified. Usage, modification, and redistribution pe
 ---
 
 **iSARTHI — Building Smarter Roads. Enabling Safer Journeys.**
+
