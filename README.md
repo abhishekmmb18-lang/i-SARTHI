@@ -78,7 +78,7 @@ The current development focuses on:
 
 - Running road-hazard detection on a Raspberry Pi.
 - Integrating sensor readings through a unified Python module.
-- Transmitting hazard events from Vehicle A to an ESP32-based Vehicle B.
+- Transmitting hazard events from Vehicle A to an Arduino Q-based Vehicle B.
 - Developing dashboard integration for telemetry and road-hazard visualization.
 
 Some integrations are still under development; capabilities listed as future or planned features should not be considered production-ready.
